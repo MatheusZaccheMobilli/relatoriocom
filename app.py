@@ -98,11 +98,7 @@ def mes_ano_label(d: date) -> str:
     return f"{MESES_PT[d.month]}/{d.year}"
 
 
-# ── Sidebar: Logo + Filtros ────────────────────────────────────────
-logo_path = Path(__file__).parent / "logo-mobilli.png"
-if logo_path.exists():
-    st.sidebar.image(str(logo_path), use_container_width=True)
-
+# ── Sidebar: Filtros ───────────────────────────────────────────────
 st.sidebar.title("Filtros")
 
 hoje = date.today()
