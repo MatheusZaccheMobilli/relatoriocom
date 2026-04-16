@@ -52,28 +52,33 @@ class RelatorioPDF(FPDF):
     def header(self):
         # Faixa laranja no topo
         self.set_fill_color(*LARANJA_ESCURO)
-        self.rect(0, 0, self.w, 28, "F")
+        self.rect(0, 0, self.w, 24, "F")
 
-        # Logo
+        # Logo — pequena, centralizada verticalmente
         if LOGO_PATH.exists():
-            self.image(str(LOGO_PATH), 8, 3, 35)
+            self.image(str(LOGO_PATH), 8, 4, 16)
 
         # Título
-        self.set_font("DejaVu", "B", 16)
+        self.set_font("DejaVu", "B", 14)
         self.set_text_color(*BRANCO)
-        self.set_xy(50, 5)
-        self.cell(0, 10, "Relatório de Comissão de Vendedores", align="L")
+        self.set_xy(28, 4)
+        self.cell(0, 8, "Relatório de Comissão de Vendedores", align="L")
 
         # Subtítulo
-        self.set_font("DejaVu", "", 10)
-        self.set_xy(50, 14)
-        self.cell(0, 8, f"Pagamento em {_mes_ano(self.rel.competencia)}", align="L")
+        self.set_font("DejaVu", "", 9)
+        self.set_xy(28, 12)
+        self.cell(0, 7, f"Pagamento em {_mes_ano(self.rel.competencia)}", align="L")
 
-        # Linha dourada
-        self.set_fill_color(*LARANJA_ESCURO)
-        self.rect(0, 28, self.w, 2, "F")
+        # Data de emissão — canto direito
+        self.set_font("DejaVu", "", 8)
+        self.set_xy(self.w - 60, 4)
+        self.cell(50, 8, f"Emitido em {date.today().strftime('%d/%m/%Y')}", align="R")
 
-        self.set_y(35)
+        # Linha de acento
+        self.set_fill_color(*LARANJA)
+        self.rect(0, 24, self.w, 1.5, "F")
+
+        self.set_y(30)
 
     def footer(self):
         self.set_y(-12)
