@@ -56,7 +56,7 @@ class RelatorioPDF(FPDF):
 
         # Logo — pequena, centralizada verticalmente
         if LOGO_PATH.exists():
-            self.image(str(LOGO_PATH), 8, 4, 16)
+            self.image(str(LOGO_PATH), 8, 3, w=10, h=18)
 
         # Título
         self.set_font("DejaVu", "B", 14)
