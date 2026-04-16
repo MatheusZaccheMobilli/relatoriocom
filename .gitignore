@@ -1,0 +1,17 @@
+.env
+*.secrets.toml
+__pycache__/
+*.pyc
+.planning/
+.claude/
+debug_*.py
+test_*.py
+_temp_*.json
+dejavu.zip
+dejavu_tmp/
+teste_relatorio.pdf
+*.docx
+*.pdf
+image.png
+gerar_relatorio_paulo.py
+src/export/assets/

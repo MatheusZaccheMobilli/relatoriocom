@@ -1,0 +1,7 @@
+streamlit>=1.45
+fast-bitrix24>=1.8
+fpdf2>=2.8
+pandas>=2.2,<3.0
+python-dotenv>=1.0
+python-dateutil>=2.9
+requests>=2.31
