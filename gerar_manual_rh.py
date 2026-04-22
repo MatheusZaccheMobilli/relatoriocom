@@ -265,40 +265,54 @@ def build() -> None:
     pdf.add_page()
 
     # ═════════════════════════════════════════════════════════════════
-    # 5. BASE DE CÁLCULO (MICROWORK)
+    # 5. BASE DE CÁLCULO
     # ═════════════════════════════════════════════════════════════════
-    pdf.h1("5. Base de Cálculo — Valor Efetivamente Pago")
+    pdf.h1("5. Base de Cálculo da Comissão")
     pdf.paragraph(
-        "A comissão NÃO incide sobre o valor do contrato. Ela incide sobre o "
-        "VALOR EFETIVAMENTE PAGO pelo cliente no MicroWork dentro de um mês "
-        "específico — e esse mês MUDA conforme a parcela:"
+        "A base de cálculo depende do tipo de operação:"
+    )
+
+    pdf.h2("Locação — base = boletos recebidos no MicroWork")
+    pdf.paragraph(
+        "A comissão de locação incide sobre os boletos de aluguel que o cliente "
+        "efetivamente pagou no MicroWork dentro de um mês específico. Esse mês "
+        "MUDA conforme a parcela:"
     )
     pdf.tabela(
         [("Parcela", 40), ("Mês da base de cálculo", 135)],
         [
             ["1/2 (Locação)", "Mês do fechamento do contrato (data da locação)"],
             ["2/2 (Locação)", "Mês SEGUINTE ao fechamento"],
-            ["1/1 (Venda)", "Mês do fechamento da venda"],
         ],
     )
     pdf.paragraph(
-        "Exemplo rápido: contrato fechado em 28/março. A parcela 1/2 (paga em "
-        "abril) usa como base APENAS os boletos desse cliente que caíram em "
-        "MARÇO. A parcela 2/2 (paga em maio) usa como base APENAS os boletos "
-        "que caíram em ABRIL. Ou seja, CADA PARCELA OLHA PRA UM MÊS DIFERENTE."
+        "O sistema identifica boletos de ALUGUEL pelo padrão do documento no "
+        'MicroWork: "{ID do deal}-{nº parcela}P - {sequência}". Exemplo: '
+        '"29146-1P - 001" indica o primeiro boleto do deal 29146. Isso filtra '
+        "automaticamente taxas de emplacamento (NF-E), multas, franquias, "
+        "reembolsos e outros lançamentos que NÃO são aluguel."
     )
-    pdf.paragraph("Como o sistema calcula, em ordem:")
-    pdf.bullet("Busca todos os recebimentos do MicroWork no período relevante.")
-    pdf.bullet("Agrupa por CPF/CNPJ do cliente.")
-    pdf.bullet(
-        "Para cada deal do vendedor, identifica a parcela (1/2, 2/2, 1/1), "
-        "determina o mês-base correspondente e soma apenas os boletos daquele "
-        "CPF que caíram naquele mês. Em cima desse valor aplica o percentual."
+
+    pdf.h2("Venda GW12 — base = valor do card Bitrix")
+    pdf.paragraph(
+        "Para venda, a comissão incide diretamente sobre o valor contratado no "
+        "card Bitrix (campo OPPORTUNITY). O sistema NÃO consulta o MicroWork "
+        "para venda, porque os pagamentos podem vir por canais externos como "
+        "financiamento bancário que não passam pelo ERP."
+    )
+
+    pdf.h2("Exemplo rápido")
+    pdf.paragraph(
+        "Contrato de locação semanal fechado em 28/março a R$ 276/semana. "
+        "A parcela 1/2 (paga em abril) usa como base APENAS os boletos de aluguel "
+        "desse cliente que caíram em MARÇO (só o de 28/03 = R$ 276). A parcela 2/2 "
+        "(paga em maio) usa como base APENAS os boletos de ABRIL (4 boletos = "
+        "R$ 1.104). Taxa de emplacamento cobrada em NF-E separada NÃO entra na base."
     )
     pdf.nota(
-        "Se um cliente atrasa o pagamento, o valor sai do mês esperado e entra "
-        "no mês seguinte — então parte da comissão pode deslocar de parcela. "
-        "Se o cliente não paga nada no mês-base, a comissão daquela parcela é zero."
+        "Se o cliente atrasa o pagamento, o valor sai do mês esperado e entra no "
+        "mês seguinte — parte da comissão pode deslocar de parcela. Se o cliente "
+        "não paga aluguel no mês-base, a comissão daquela parcela é zero."
     )
 
     # ═════════════════════════════════════════════════════════════════
@@ -422,25 +436,25 @@ def build() -> None:
     # ── Exemplo 3 ────────────────────────────────────────────────────
     pdf.h2("Exemplo 3 — Venda GW12 0km")
     pdf.paragraph(
-        "Cenário: vendedor vende uma moto 0km em 10/março. Cliente paga R$ 18.000 "
-        "à vista em 12/março."
+        "Cenário: vendedor vende uma moto 0km em 10/março, card Bitrix com valor "
+        "de R$ 14.000 (valor da moto sem emplacamento/taxas)."
     )
     pdf.exemplo_box(
         "Cálculo",
         [
             ("Data da venda", "10/março"),
-            ("Pagamento do cliente entra no MicroWork", "12/março"),
             ("Parcela única 1/1 paga em", "Abril (M+1)"),
-            ("Regra da base", "Mês do fechamento = MARÇO"),
-            ("Base de cálculo", "R$ 18.000 (recebido em março)"),
-            ("Comissão Bronze (1%)", "R$ 180,00"),
-            ("Comissão Prata (1,20%)", "R$ 216,00"),
-            ("Comissão Ouro (1,30%)", "R$ 234,00"),
+            ("Regra da base", "Valor do card Bitrix (direto)"),
+            ("Base de cálculo", "R$ 14.000 (não consulta MicroWork)"),
+            ("Comissão Bronze (1%)", "R$ 140,00"),
+            ("Comissão Prata (1,20%)", "R$ 168,00"),
+            ("Comissão Ouro (1,30%)", "R$ 182,00"),
         ],
     )
     pdf.nota(
-        "Se a venda for parcelada em boletos e parte cair em abril, só o que "
-        "caiu em MARÇO entra na base (mês do fechamento = mês-base da 1/1)."
+        "Para venda o sistema NÃO olha o MicroWork — usa o valor do card direto. "
+        "Isso evita inflar a base com emplacamento, taxas ou encargos que "
+        "aparecem junto na NF-E do financeiro."
     )
 
     # ── Exemplo 4 ────────────────────────────────────────────────────
@@ -473,8 +487,10 @@ def build() -> None:
         "e total a receber."
     )
     pdf.bullet(
-        "LISTA DE VERIFICAÇÃO: uma linha por negócio, com parcela (1/2, 2/2 ou "
-        "1/1), cliente, placa, datas, valor base (MicroWork) e comissão."
+        "LISTA DE VERIFICAÇÃO: uma linha por negócio, com: Tipo (Locação/Venda), "
+        "Parcela (1/2, 2/2 ou 1/1), Plano (Semanal/Mensal), Cliente, Placa, "
+        "Data Locação, Data Devolução, Valor Base, Parcelas (qtd boletos "
+        "considerados na base), Comissão e Status (Ativo/Devolvido)."
     )
     pdf.bullet(
         "TERMO DE CIÊNCIA: espaço para assinatura do vendedor confirmando que "

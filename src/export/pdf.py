@@ -162,15 +162,17 @@ def gerar_pdf(relatorio: RelatorioData) -> bytes:
 
     # Cabeçalho da tabela
     cols = [
-        ("Tipo", 22),
-        ("Parcela", 16),
-        ("Nome do Cliente", 72),
-        ("Placa", 22),
-        ("Data Locação", 26),
-        ("Data Devolução", 26),
-        ("Valor Base", 30),
-        ("Comissão", 28),
-        ("Status", 18),
+        ("Tipo", 20),
+        ("Parcela", 14),
+        ("Plano", 16),
+        ("Nome do Cliente", 58),
+        ("Placa", 20),
+        ("Data Locação", 22),
+        ("Data Devolução", 22),
+        ("Valor Base", 26),
+        ("Parcelas", 14),
+        ("Comissão", 24),
+        ("Status", 16),
     ]
 
     pdf.set_fill_color(*LARANJA_ESCURO)
@@ -193,14 +195,29 @@ def gerar_pdf(relatorio: RelatorioData) -> bytes:
             pdf.set_fill_color(*CINZA_CLARO)
             pdf.set_text_color(*PRETO)
 
+        # Plano: "Semanal"/"Mensal" pra locação, "—" pra venda
+        if item.tipo_operacao == "Locação":
+            plano_str = "Semanal" if item.plano_semanal else "Mensal"
+        else:
+            plano_str = "—"
+
+        # Parcelas: qtd pra locação, "—" pra venda (é parcela única)
+        parcelas_str = (
+            str(item.qtd_parcelas_pagas)
+            if item.tipo_operacao == "Locação"
+            else "—"
+        )
+
         vals = [
             item.tipo_operacao,
             item.parcela,
-            item.nome_cliente[:40],
+            plano_str,
+            item.nome_cliente[:35],
             item.placa,
             _fmt_data(item.data_locacao),
             _fmt_data(item.data_devolucao),
             _brl(item.valor_base),
+            parcelas_str,
             _brl(item.valor_comissao),
             "DEVOLVIDO" if item.devolvido else "Ativo",
         ]

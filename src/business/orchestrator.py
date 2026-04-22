@@ -58,17 +58,13 @@ def _total_pago_por_cpf(
     return sum((p.valor_total for p in pagamentos), Decimal("0"))
 
 
-def _pago_no_mes(
+def _boletos_no_mes(
     pagamentos_por_cpf: dict[str, list[Pagamento]],
     cpf: str,
     mes: date,
     apenas_aluguel: bool = False,
-) -> Decimal:
-    """Soma pagamentos de um CPF dentro do mês calendário informado.
-
-    Usado para segmentar a base de cálculo por parcela:
-    - Parcela 1/2: base = pagamentos no mês do fechamento (mês da data_locacao)
-    - Parcela 2/2: base = pagamentos no mês seguinte ao fechamento
+) -> list[Pagamento]:
+    """Lista pagamentos de um CPF dentro do mês calendário informado.
 
     Se apenas_aluguel=True, filtra somente boletos no padrão de aluguel
     (descarta taxas NF-E, franquia, multa, etc).
@@ -76,13 +72,25 @@ def _pago_no_mes(
     inicio = _primeiro_dia_mes(mes)
     fim = _ultimo_dia_mes(mes)
     pagamentos = pagamentos_por_cpf.get(cpf, [])
+    return [
+        p
+        for p in pagamentos
+        if inicio <= p.movimento <= fim
+        and (not apenas_aluguel or _eh_boleto_aluguel(p))
+    ]
+
+
+def _pago_no_mes(
+    pagamentos_por_cpf: dict[str, list[Pagamento]],
+    cpf: str,
+    mes: date,
+    apenas_aluguel: bool = False,
+) -> Decimal:
+    """Soma o valor dos pagamentos de um CPF no mês calendário informado."""
     return sum(
-        (
-            p.valor_total
-            for p in pagamentos
-            if inicio <= p.movimento <= fim
-            and (not apenas_aluguel or _eh_boleto_aluguel(p))
-        ),
+        (p.valor_total for p in _boletos_no_mes(
+            pagamentos_por_cpf, cpf, mes, apenas_aluguel
+        )),
         Decimal("0"),
     )
 
@@ -239,11 +247,14 @@ def montar_relatorio(
         tipo_op = _tipo_operacao_do_pipeline(deal.pipeline_id)
         if deal.pipeline_id == bitrix.PIPELINE_LOCACAO:
             mes_base = _mes_base_parcela(data_ref, parcela_str)
-            valor_base = _pago_no_mes(
+            boletos = _boletos_no_mes(
                 pagamentos_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
+            valor_base = sum((b.valor_total for b in boletos), Decimal("0"))
+            qtd_parcelas = len(boletos)
         else:
             valor_base = deal.valor
+            qtd_parcelas = 1  # venda = 1 parcela (o próprio card)
 
         # Comissão — zero se devolvido
         valor_comissao = Decimal("0")
@@ -263,6 +274,8 @@ def montar_relatorio(
                 tipo_operacao=tipo_op,
                 data_devolucao=data_devolucao,
                 devolvido=deal_devolvido,
+                plano_semanal=deal.plano_semanal,
+                qtd_parcelas_pagas=qtd_parcelas,
             )
         )
 

@@ -80,6 +80,8 @@ class ComissaoItem:
     tipo_operacao: str  # "Locação", "Venda 0km", "Venda Usado"
     data_devolucao: Optional[date] = None  # preenchido se houve rescisão
     devolvido: bool = False  # True = parcela não é paga
+    plano_semanal: bool = False  # True = plano semanal; False = mensal
+    qtd_parcelas_pagas: int = 0  # qtd de boletos que entraram na base
 
 
 @dataclass(frozen=True)

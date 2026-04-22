@@ -102,10 +102,14 @@ def mes_ano_label(d: date) -> str:
 st.sidebar.title("Filtros")
 
 hoje = date.today()
+# Lista meses a partir de maio/2026 (primeiro mês com a regra nova vigente)
+# até o mês seguinte ao atual, ordenados do mais recente pro mais antigo.
+INICIO_OPCOES = date(2026, 5, 1)
 meses_opcoes = []
-for i in range(-1, 12):
-    m = hoje.replace(day=1) - relativedelta(months=i)
+m = hoje.replace(day=1) + relativedelta(months=1)
+while m >= INICIO_OPCOES:
     meses_opcoes.append(m)
+    m = m - relativedelta(months=1)
 
 mes_pagamento = st.sidebar.selectbox(
     "Mês de pagamento",

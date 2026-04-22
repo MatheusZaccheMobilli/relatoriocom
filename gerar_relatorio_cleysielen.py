@@ -23,9 +23,9 @@ load_dotenv(Path(__file__).parent / ".env")
 
 from src.business.comissao import TABELA_COMISSAO, calcular_comissao, calcular_nivel
 from src.business.orchestrator import (
+    _boletos_no_mes,
     _mes_base_parcela,
     _normalize_cpf,
-    _pago_no_mes,
 )
 from src.data import bitrix, microwork
 from src.export.pdf import gerar_pdf
@@ -151,11 +151,14 @@ def main() -> None:
         tipo_op = _tipo_operacao(deal.pipeline_id)
         if deal.pipeline_id == bitrix.PIPELINE_LOCACAO:
             mes_base = _mes_base_parcela(deal.data_locacao, parcela)
-            valor_base = _pago_no_mes(
+            boletos = _boletos_no_mes(
                 pag_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
+            valor_base = sum((b.valor_total for b in boletos), Decimal("0"))
+            qtd_parcelas = len(boletos)
         else:
             valor_base = deal.valor
+            qtd_parcelas = 1
 
         valor_comissao = Decimal("0")
         if not deal_devolvido and nivel.nome in ("Bronze", "Prata", "Ouro"):
@@ -174,6 +177,8 @@ def main() -> None:
                 tipo_operacao=tipo_op,
                 data_devolucao=data_devolucao,
                 devolvido=deal_devolvido,
+                plano_semanal=deal.plano_semanal,
+                qtd_parcelas_pagas=qtd_parcelas,
             )
         )
 
