@@ -157,13 +157,9 @@ def main() -> None:
             boletos = _boletos_no_mes(
                 pag_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
-            soma_boletos = sum((b.valor_total for b in boletos), Decimal("0"))
             qtd_parcelas = len(boletos)
-            # Medida de segurança: base mínima = qtd × card
-            if qtd_parcelas > 0:
-                valor_base = max(soma_boletos, deal.valor * qtd_parcelas)
-            else:
-                valor_base = Decimal("0")
+            # Base = qtd boletos × card (descarta juros, protege parciais)
+            valor_base = deal.valor * qtd_parcelas
         else:
             valor_base = deal.valor
             qtd_parcelas = 1
