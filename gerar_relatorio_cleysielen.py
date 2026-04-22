@@ -12,7 +12,7 @@ Nível da empresa é apurado sobre a janela do ciclo atual (26/03-20/04).
 import io
 import sys
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -157,8 +157,16 @@ def main() -> None:
             boletos = _boletos_no_mes(
                 pag_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
-            qtd_parcelas = len(boletos)
-            # Base = qtd boletos × card (descarta juros, protege parciais)
+            soma_boletos = sum((b.valor_total for b in boletos), Decimal("0"))
+            # qtd efetiva = soma / card arredondada (descarta juros, reconhece multi-período)
+            if deal.valor > 0:
+                qtd_parcelas = int(
+                    (soma_boletos / deal.valor).quantize(
+                        Decimal("1"), rounding=ROUND_HALF_UP
+                    )
+                )
+            else:
+                qtd_parcelas = 0
             valor_base = deal.valor * qtd_parcelas
         else:
             valor_base = deal.valor

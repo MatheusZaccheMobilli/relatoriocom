@@ -2,7 +2,7 @@
 
 import re
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from dateutil.relativedelta import relativedelta
 
 from src.models import ComissaoItem, Deal, Pagamento, RelatorioData, Vendedor
@@ -256,10 +256,20 @@ def montar_relatorio(
             boletos = _boletos_no_mes(
                 pagamentos_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
-            qtd_parcelas = len(boletos)
-            # Base = qtd boletos × valor do card (Bitrix).
-            # Descarta juros/multa do cliente (não geram comissão pro vendedor)
-            # e protege pagamentos parciais (R$176 de R$276 → conta 1 × R$276).
+            soma_boletos = sum((b.valor_total for b in boletos), Decimal("0"))
+            # Quantidade EFETIVA de parcelas = soma pago / valor do card (arredondado).
+            # Isso:
+            # - Descarta juros/multa (pagou R$833 com card R$276 → 3 parcelas, não 4)
+            # - Protege pagamento parcial (pagou R$176 de R$276 → 1 parcela, vendedor ganha sobre card cheio)
+            # - Reconhece boleto multi-período (1 boleto de R$552 = 2 semanas)
+            if deal.valor > 0:
+                qtd_parcelas = int(
+                    (soma_boletos / deal.valor).quantize(
+                        Decimal("1"), rounding=ROUND_HALF_UP
+                    )
+                )
+            else:
+                qtd_parcelas = 0
             valor_base = deal.valor * qtd_parcelas
         else:
             valor_base = deal.valor
