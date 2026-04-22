@@ -95,8 +95,9 @@ def buscar_deals(pipeline_id: int, fecha_inicio: date, fecha_fim: date) -> list[
     resultado = []
 
     for d in raw_deals:
-        semanal_raw = (d.get("UF_CRM_WEEKLY_SUBSCRIPTION") or "").strip().lower()
-        is_semanal = semanal_raw not in ("", "não", "nao", "no")
+        # UF_CRM_WEEKLY_SUBSCRIPTION é boolean do Bitrix: "1" = semanal, "0" = mensal
+        semanal_raw = (d.get("UF_CRM_WEEKLY_SUBSCRIPTION") or "").strip()
+        is_semanal = semanal_raw == "1"
 
         resultado.append(
             Deal(
