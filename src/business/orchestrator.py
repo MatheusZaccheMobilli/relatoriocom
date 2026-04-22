@@ -34,9 +34,41 @@ def _total_pago_por_cpf(
     pagamentos_por_cpf: dict[str, list[Pagamento]],
     cpf: str,
 ) -> Decimal:
-    """Soma o valor total pago por um CPF no MicroWork."""
+    """Soma o valor total pago por um CPF no MicroWork (sem filtro de mês)."""
     pagamentos = pagamentos_por_cpf.get(cpf, [])
     return sum((p.valor_total for p in pagamentos), Decimal("0"))
+
+
+def _pago_no_mes(
+    pagamentos_por_cpf: dict[str, list[Pagamento]],
+    cpf: str,
+    mes: date,
+) -> Decimal:
+    """Soma pagamentos de um CPF dentro do mês calendário informado.
+
+    Usado para segmentar a base de cálculo por parcela:
+    - Parcela 1/2: base = pagamentos no mês do fechamento (mês da data_locacao)
+    - Parcela 2/2: base = pagamentos no mês seguinte ao fechamento
+    - Parcela 1/1 (venda): base = pagamentos no mês do fechamento
+    """
+    inicio = _primeiro_dia_mes(mes)
+    fim = _ultimo_dia_mes(mes)
+    pagamentos = pagamentos_por_cpf.get(cpf, [])
+    return sum(
+        (p.valor_total for p in pagamentos if inicio <= p.movimento <= fim),
+        Decimal("0"),
+    )
+
+
+def _mes_base_parcela(data_locacao: date, parcela: str) -> date:
+    """Retorna o mês de referência para a base de cálculo de uma parcela.
+
+    - 1/2 e 1/1: mês do fechamento (data_locacao)
+    - 2/2: mês seguinte ao fechamento
+    """
+    if parcela == "2/2":
+        return data_locacao + relativedelta(months=1)
+    return data_locacao
 
 
 def _buscar_deals_ambos_pipelines(mes_referencia: date) -> list[Deal]:
@@ -172,11 +204,12 @@ def montar_relatorio(
         if pagamentos_cliente:
             nome_cliente = pagamentos_cliente[0].pessoa
 
-        # Valor base = MicroWork, fallback = deal
+        # Base = pagamentos do CPF no mês de referência da parcela
+        # - 1/2 e 1/1: mês do fechamento
+        # - 2/2: mês seguinte ao fechamento
         tipo_op = _tipo_operacao_do_pipeline(deal.pipeline_id)
-        valor_base = _total_pago_por_cpf(pagamentos_por_cpf, cpf_deal)
-        if valor_base == Decimal("0"):
-            valor_base = deal.valor
+        mes_base = _mes_base_parcela(data_ref, parcela_str)
+        valor_base = _pago_no_mes(pagamentos_por_cpf, cpf_deal, mes_base)
 
         # Comissão — zero se devolvido
         valor_comissao = Decimal("0")
