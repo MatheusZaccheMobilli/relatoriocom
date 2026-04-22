@@ -149,8 +149,13 @@ def main() -> None:
             nome_cliente = pagamentos_cliente[0].pessoa
 
         tipo_op = _tipo_operacao(deal.pipeline_id)
-        mes_base = _mes_base_parcela(deal.data_locacao, parcela)
-        valor_base = _pago_no_mes(pag_por_cpf, cpf_deal, mes_base)
+        if deal.pipeline_id == bitrix.PIPELINE_LOCACAO:
+            mes_base = _mes_base_parcela(deal.data_locacao, parcela)
+            valor_base = _pago_no_mes(
+                pag_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
+            )
+        else:
+            valor_base = deal.valor
 
         valor_comissao = Decimal("0")
         if not deal_devolvido and nivel.nome in ("Bronze", "Prata", "Ouro"):

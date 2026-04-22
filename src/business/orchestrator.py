@@ -1,5 +1,6 @@
 """Orquestrador — conecta dados do Bitrix + MicroWork e monta o RelatorioData."""
 
+import re
 from datetime import date
 from decimal import Decimal
 from dateutil.relativedelta import relativedelta
@@ -7,6 +8,24 @@ from dateutil.relativedelta import relativedelta
 from src.models import ComissaoItem, Deal, Pagamento, RelatorioData, Vendedor
 from src.data import bitrix, microwork
 from src.business.comissao import calcular_nivel, calcular_comissao
+
+
+# Padrão do documento MicroWork para boletos de aluguel:
+#   {deal_id}-{parcela}[P] - {seq}
+# Ex: "29146-1P - 001", "33266-2 - 001", "35294-104P - 001"
+_DOC_ALUGUEL_RE = re.compile(r"^\d{4,}-\d+P?\s*-\s*\d+$")
+
+
+def _eh_boleto_aluguel(pagamento: Pagamento) -> bool:
+    """Verifica se o pagamento é um boleto de aluguel (locação).
+
+    Regra: especie = OUTROS e documento casa com padrão dealID-NP - seq.
+    Exclui automaticamente NF-E (taxas/emplacamento), FRANQUIA, MULTA,
+    REEMBOLSO, RECEBIINDEVIDO, etc. pois esses não seguem o padrão.
+    """
+    if pagamento.especie != "OUTROS":
+        return False
+    return bool(_DOC_ALUGUEL_RE.match(pagamento.documento.strip()))
 
 
 def _normalize_cpf(raw: str) -> str:
@@ -43,19 +62,27 @@ def _pago_no_mes(
     pagamentos_por_cpf: dict[str, list[Pagamento]],
     cpf: str,
     mes: date,
+    apenas_aluguel: bool = False,
 ) -> Decimal:
     """Soma pagamentos de um CPF dentro do mês calendário informado.
 
     Usado para segmentar a base de cálculo por parcela:
     - Parcela 1/2: base = pagamentos no mês do fechamento (mês da data_locacao)
     - Parcela 2/2: base = pagamentos no mês seguinte ao fechamento
-    - Parcela 1/1 (venda): base = pagamentos no mês do fechamento
+
+    Se apenas_aluguel=True, filtra somente boletos no padrão de aluguel
+    (descarta taxas NF-E, franquia, multa, etc).
     """
     inicio = _primeiro_dia_mes(mes)
     fim = _ultimo_dia_mes(mes)
     pagamentos = pagamentos_por_cpf.get(cpf, [])
     return sum(
-        (p.valor_total for p in pagamentos if inicio <= p.movimento <= fim),
+        (
+            p.valor_total
+            for p in pagamentos
+            if inicio <= p.movimento <= fim
+            and (not apenas_aluguel or _eh_boleto_aluguel(p))
+        ),
         Decimal("0"),
     )
 
@@ -204,12 +231,19 @@ def montar_relatorio(
         if pagamentos_cliente:
             nome_cliente = pagamentos_cliente[0].pessoa
 
-        # Base = pagamentos do CPF no mês de referência da parcela
-        # - 1/2 e 1/1: mês do fechamento
-        # - 2/2: mês seguinte ao fechamento
+        # Base de cálculo:
+        # - Locação (pipeline 48): soma dos boletos de aluguel do CPF no mês-base
+        #   (1/2 = mês do fechamento, 2/2 = mês seguinte)
+        #   Filtra apenas docs no padrão "dealID-NP - seq" (exclui taxas NF-E, franquia, multa).
+        # - Venda (pipeline 40): valor direto do card Bitrix (deal.valor).
         tipo_op = _tipo_operacao_do_pipeline(deal.pipeline_id)
-        mes_base = _mes_base_parcela(data_ref, parcela_str)
-        valor_base = _pago_no_mes(pagamentos_por_cpf, cpf_deal, mes_base)
+        if deal.pipeline_id == bitrix.PIPELINE_LOCACAO:
+            mes_base = _mes_base_parcela(data_ref, parcela_str)
+            valor_base = _pago_no_mes(
+                pagamentos_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
+            )
+        else:
+            valor_base = deal.valor
 
         # Comissão — zero se devolvido
         valor_comissao = Decimal("0")
