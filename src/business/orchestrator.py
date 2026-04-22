@@ -257,19 +257,25 @@ def montar_relatorio(
                 pagamentos_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
             soma_boletos = sum((b.valor_total for b in boletos), Decimal("0"))
-            # Quantidade EFETIVA de parcelas = soma pago / valor do card (arredondado).
-            # Isso:
-            # - Descarta juros/multa (pagou R$833 com card R$276 → 3 parcelas, não 4)
-            # - Protege pagamento parcial (pagou R$176 de R$276 → 1 parcela, vendedor ganha sobre card cheio)
-            # - Reconhece boleto multi-período (1 boleto de R$552 = 2 semanas)
-            if deal.valor > 0:
-                qtd_parcelas = int(
-                    (soma_boletos / deal.valor).quantize(
-                        Decimal("1"), rounding=ROUND_HALF_UP
+            if deal.plano_semanal:
+                # Semanal: quantidade efetiva = soma pago / card (arredondado).
+                # - Descarta juros/multa (pagou R$833 com card R$276 → 3 parcelas, não 4)
+                # - Protege pagamento parcial (pagou R$176 de R$276 → 1 parcela)
+                # - Reconhece boleto multi-período (1 boleto de R$552 = 2 semanas)
+                if deal.valor > 0:
+                    qtd_parcelas = int(
+                        (soma_boletos / deal.valor).quantize(
+                            Decimal("1"), rounding=ROUND_HALF_UP
+                        )
                     )
-                )
+                else:
+                    qtd_parcelas = 0
             else:
-                qtd_parcelas = 0
+                # Mensal: 1 boleto por mês é o esperado.
+                # Se o cliente antecipou a próxima mensalidade no mesmo mês,
+                # isso NÃO infla a comissão — base continua sendo 1× o card.
+                # qtd = 1 se pagou pelo menos 1 boleto de aluguel, 0 caso contrário.
+                qtd_parcelas = 1 if boletos else 0
             valor_base = deal.valor * qtd_parcelas
         else:
             valor_base = deal.valor
