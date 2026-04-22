@@ -256,8 +256,16 @@ def montar_relatorio(
             boletos = _boletos_no_mes(
                 pagamentos_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
-            valor_base = sum((b.valor_total for b in boletos), Decimal("0"))
+            soma_boletos = sum((b.valor_total for b in boletos), Decimal("0"))
             qtd_parcelas = len(boletos)
+            # Medida de segurança: se tem pelo menos 1 boleto de aluguel,
+            # base mínima = qtd × card. Protege contra pagamento parcial
+            # (ex: cliente pagou R$176 de R$276 → sobe pra R$276).
+            if qtd_parcelas > 0:
+                base_minima = deal.valor * qtd_parcelas
+                valor_base = max(soma_boletos, base_minima)
+            else:
+                valor_base = Decimal("0")
         else:
             valor_base = deal.valor
             qtd_parcelas = 1  # venda = 1 parcela (o próprio card)
