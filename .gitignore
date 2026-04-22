@@ -1,17 +1,32 @@
+# Segredos / ambiente
 .env
 *.secrets.toml
+secrets_streamlit.txt
+
+# Cache Python
 __pycache__/
 *.pyc
+
+# Ferramentas locais
 .planning/
 .claude/
-debug_*.py
-test_*.py
-_temp_*.json
+
+# Pasta de exploração — não é parte do app
+scripts/validacao/
+
+# Outputs gerados
+output/
+*.pdf
+
+# Docs e rascunhos
+docs/*.docx
+*.docx
+
+# Imagens avulsas
+image.png
+image copy.png
+
+# Assets de fontes
 dejavu.zip
 dejavu_tmp/
-teste_relatorio.pdf
-*.docx
-*.pdf
-image.png
-gerar_relatorio_paulo.py
 src/export/assets/

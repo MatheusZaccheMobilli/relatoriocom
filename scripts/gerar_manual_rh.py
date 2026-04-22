@@ -31,9 +31,11 @@ PRETO = (30, 30, 30)
 VERDE = (39, 139, 57)
 VERMELHO = (170, 40, 40)
 
-LOGO_PATH = Path(__file__).parent / "logo-mobilli.png"
-FONTS_DIR = Path(__file__).parent / "src" / "export" / "fonts"
-OUT_PATH = Path(__file__).parent / "manual_relatorio_comissao.pdf"
+ROOT = Path(__file__).resolve().parents[1]
+LOGO_PATH = ROOT / "logo-mobilli.png"
+FONTS_DIR = ROOT / "src" / "export" / "fonts"
+OUT_PATH = ROOT / "output" / "manual_relatorio_comissao.pdf"
+OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 class ManualPDF(FPDF):
