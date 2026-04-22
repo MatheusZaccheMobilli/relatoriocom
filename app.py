@@ -15,6 +15,7 @@ from dateutil.relativedelta import relativedelta
 from src.business.orchestrator import montar_relatorio
 from src.models import RelatorioData
 from src.export.pdf import gerar_pdf
+from src.export.xlsx import gerar_xlsx
 
 # ── Config ──────────────────────────────────────────────────────────
 st.set_page_config(
@@ -247,13 +248,27 @@ else:
 st.divider()
 st.markdown(f"### Total a receber: {formatar_brl(relatorio.total_comissao)}")
 
-# ── Download PDF ────────────────────────────────────────────────────
+# ── Download PDF + XLSX ─────────────────────────────────────────────
 pdf_bytes = gerar_pdf(relatorio)
-st.download_button(
-    "Baixar Relatório PDF",
-    pdf_bytes,
-    file_name=f"comissao_{vendedor_nome.replace(' ', '_')}_{mes_ano_label(mes_pagamento)}.pdf",
-    mime="application/pdf",
-    use_container_width=True,
-)
+xlsx_bytes = gerar_xlsx(relatorio)
+
+base_nome = f"comissao_{vendedor_nome.replace(' ', '_')}_{mes_ano_label(mes_pagamento)}"
+
+col_dl1, col_dl2 = st.columns(2)
+with col_dl1:
+    st.download_button(
+        "📄 Baixar PDF",
+        pdf_bytes,
+        file_name=f"{base_nome}.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+with col_dl2:
+    st.download_button(
+        "📊 Baixar Excel",
+        xlsx_bytes,
+        file_name=f"{base_nome}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
 
