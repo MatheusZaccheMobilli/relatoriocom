@@ -240,13 +240,19 @@ def montar_relatorio(
             nome_cliente = pagamentos_cliente[0].pessoa
 
         # Base de cálculo:
-        # - Locação (pipeline 48): soma dos boletos de aluguel do CPF no mês-base
-        #   (1/2 = mês do fechamento, 2/2 = mês seguinte)
-        #   Filtra apenas docs no padrão "dealID-NP - seq" (exclui taxas NF-E, franquia, multa).
-        # - Venda (pipeline 40): valor direto do card Bitrix (deal.valor).
+        # - Locação SEMANAL: cada parcela olha seu próprio mês-base
+        #   1/2 = boletos do mês do fechamento
+        #   2/2 = boletos do mês seguinte ao fechamento
+        # - Locação MENSAL: ambas parcelas usam o mês do fechamento (1 boleto mensal)
+        #   e a comissão total é dividida igualmente em 1/2 e 2/2.
+        # - Venda: base = deal.valor (card Bitrix direto).
         tipo_op = _tipo_operacao_do_pipeline(deal.pipeline_id)
         if deal.pipeline_id == bitrix.PIPELINE_LOCACAO:
-            mes_base = _mes_base_parcela(data_ref, parcela_str)
+            if deal.plano_semanal:
+                mes_base = _mes_base_parcela(data_ref, parcela_str)
+            else:
+                # Mensal: ambas as parcelas calculam sobre o mesmo mês (fechamento)
+                mes_base = _primeiro_dia_mes(data_ref)
             boletos = _boletos_no_mes(
                 pagamentos_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
@@ -260,6 +266,14 @@ def montar_relatorio(
         valor_comissao = Decimal("0")
         if not deal_devolvido and nivel.nome in ("Bronze", "Prata", "Ouro"):
             valor_comissao = calcular_comissao(valor_base, tipo_op, nivel.nome)
+            # Mensal: comissão total dividida em 2 parcelas iguais
+            if (
+                deal.pipeline_id == bitrix.PIPELINE_LOCACAO
+                and not deal.plano_semanal
+            ):
+                valor_comissao = (valor_comissao / Decimal("2")).quantize(
+                    Decimal("0.01")
+                )
 
         itens.append(
             ComissaoItem(

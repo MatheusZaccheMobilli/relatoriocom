@@ -208,14 +208,23 @@ if not relatorio.itens:
 else:
     linhas = []
     for item in relatorio.itens:
+        if item.tipo_operacao == "Locação":
+            plano_str = "Semanal" if item.plano_semanal else "Mensal"
+            parcelas_str = str(item.qtd_parcelas_pagas)
+        else:
+            plano_str = "—"
+            parcelas_str = "—"
+
         linha = {
             "Tipo": item.tipo_operacao,
             "Parcela": item.parcela,
+            "Plano": plano_str,
             "Nome do Cliente": item.nome_cliente,
             "Placa": item.placa,
             "Data Locação": formatar_data(item.data_locacao),
             "Data Devolução": formatar_data(item.data_devolucao),
             "Valor Base": formatar_brl(item.valor_base),
+            "Parcelas": parcelas_str,
             "Comissão": formatar_brl(item.valor_comissao),
             "Status": "DEVOLVIDO" if item.devolvido else "Ativo",
         }

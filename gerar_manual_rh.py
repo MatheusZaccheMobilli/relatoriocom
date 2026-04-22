@@ -272,18 +272,33 @@ def build() -> None:
         "A base de cálculo depende do tipo de operação:"
     )
 
-    pdf.h2("Locação — base = boletos recebidos no MicroWork")
+    pdf.h2("Locação — a base depende do PLANO (semanal ou mensal)")
     pdf.paragraph(
-        "A comissão de locação incide sobre os boletos de aluguel que o cliente "
-        "efetivamente pagou no MicroWork dentro de um mês específico. Esse mês "
-        "MUDA conforme a parcela:"
+        "A comissão de locação incide sobre os boletos de ALUGUEL que o cliente "
+        "efetivamente pagou no MicroWork. Mas a forma de calcular MUDA conforme "
+        "o plano do contrato seja SEMANAL ou MENSAL:"
     )
     pdf.tabela(
-        [("Parcela", 40), ("Mês da base de cálculo", 135)],
+        [("Plano", 30), ("1/2 (paga em M+1)", 72), ("2/2 (paga em M+2)", 72)],
         [
-            ["1/2 (Locação)", "Mês do fechamento do contrato (data da locação)"],
-            ["2/2 (Locação)", "Mês SEGUINTE ao fechamento"],
+            [
+                "Semanal",
+                "Boletos do MÊS DO FECHAMENTO × %",
+                "Boletos do MÊS SEGUINTE × %",
+            ],
+            [
+                "Mensal",
+                "(Mensalidade do MÊS DO FECHAMENTO × %) ÷ 2",
+                "(Mensalidade do MÊS DO FECHAMENTO × %) ÷ 2",
+            ],
         ],
+    )
+    pdf.paragraph(
+        "Por que a diferença? No plano SEMANAL o cliente paga 4-5 boletos por "
+        "mês, então cada parcela da comissão olha um mês diferente (o vendedor "
+        "acompanha o cliente em 2 meses). No plano MENSAL o cliente paga UMA "
+        "mensalidade por mês — então a comissão é calculada sobre a primeira "
+        "mensalidade paga e dividida igualmente em 2 parcelas."
     )
     pdf.paragraph(
         "O sistema identifica boletos de ALUGUEL pelo padrão do documento no "
@@ -359,25 +374,32 @@ def build() -> None:
     pdf.h1("8. Exemplos Práticos")
 
     # ── Exemplo 1 ────────────────────────────────────────────────────
-    pdf.h2("Exemplo 1 — Locação mensal fechada no meio do mês")
-    pdf.paragraph("Cenário: vendedor fecha locação mensal em 15/março. Aluguel de R$ 1.200/mês.")
-    pdf.exemplo_box(
-        "Fluxo de pagamento do cliente",
-        [
-            ("Data da locação", "15/março"),
-            ("1ª mensalidade paga", "15/março (MicroWork registra em março)"),
-            ("2ª mensalidade paga", "15/abril (MicroWork registra em abril)"),
-            ("3ª mensalidade paga", "15/maio (MicroWork registra em maio)"),
-        ],
+    pdf.h2("Exemplo 1 — Locação MENSAL fechada no meio do mês")
+    pdf.paragraph(
+        "Cenário: vendedor fecha locação mensal em 15/março. Aluguel de "
+        "R$ 1.200/mês. Cliente paga a 1ª mensalidade no mesmo dia (15/03)."
     )
     pdf.exemplo_box(
-        "Comissão (nível Bronze = 8%)",
+        "Cálculo da comissão (regra do MENSAL: comissão total ÷ 2)",
         [
-            ("Parcela 1/2 (paga em abril)", "Base = boletos de MARÇO desse CPF"),
-            ("→ Base: 1 boleto de R$ 1.200", "8% × R$ 1.200 = R$ 96,00"),
-            ("Parcela 2/2 (paga em maio)", "Base = boletos de ABRIL desse CPF"),
-            ("→ Base: 1 boleto de R$ 1.200", "8% × R$ 1.200 = R$ 96,00"),
-            ("TOTAL da comissão (2 meses)", "R$ 192,00"),
+            ("Base (1ª mensalidade paga em março)", "R$ 1.200,00"),
+            ("Comissão total (Bronze 8%)", "R$ 96,00"),
+            ("Parcela 1/2 (paga em abril)", "R$ 96,00 ÷ 2 = R$ 48,00"),
+            ("Parcela 2/2 (paga em maio)", "R$ 96,00 ÷ 2 = R$ 48,00"),
+            ("TOTAL recebido pelo vendedor", "R$ 96,00 (em 2 meses)"),
+        ],
+    )
+    pdf.nota(
+        "Mensal: o vendedor ganha comissão UMA vez por contrato (sobre a "
+        "primeira mensalidade paga), dividida em 2 parcelas mensais. "
+        "Mensalidades subsequentes que o cliente paga não geram nova comissão."
+    )
+    pdf.exemplo_box(
+        "E se o cliente NÃO pagar a primeira mensalidade?",
+        [
+            ("Base (mês do fechamento)", "R$ 0,00 (nenhum boleto caiu)"),
+            ("Comissão 1/2", "R$ 0,00"),
+            ("Comissão 2/2", "R$ 0,00"),
         ],
     )
 

@@ -150,7 +150,10 @@ def main() -> None:
 
         tipo_op = _tipo_operacao(deal.pipeline_id)
         if deal.pipeline_id == bitrix.PIPELINE_LOCACAO:
-            mes_base = _mes_base_parcela(deal.data_locacao, parcela)
+            if deal.plano_semanal:
+                mes_base = _mes_base_parcela(deal.data_locacao, parcela)
+            else:
+                mes_base = deal.data_locacao.replace(day=1)
             boletos = _boletos_no_mes(
                 pag_por_cpf, cpf_deal, mes_base, apenas_aluguel=True
             )
@@ -163,6 +166,14 @@ def main() -> None:
         valor_comissao = Decimal("0")
         if not deal_devolvido and nivel.nome in ("Bronze", "Prata", "Ouro"):
             valor_comissao = calcular_comissao(valor_base, tipo_op, nivel.nome)
+            # Mensal: comissão dividida em 2 parcelas iguais
+            if (
+                deal.pipeline_id == bitrix.PIPELINE_LOCACAO
+                and not deal.plano_semanal
+            ):
+                valor_comissao = (valor_comissao / Decimal("2")).quantize(
+                    Decimal("0.01")
+                )
 
         itens.append(
             ComissaoItem(
