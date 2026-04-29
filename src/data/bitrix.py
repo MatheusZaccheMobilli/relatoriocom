@@ -1,6 +1,7 @@
 """Cliente da API Bitrix24 — puxa deals e vendedores."""
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -156,45 +157,52 @@ def buscar_vendedores(user_ids: list[int]) -> dict[int, Vendedor]:
 PIPELINE_DEVOLUCAO = 22
 
 
+def _devolucoes_de_placa(placa: str) -> tuple[str, list[dict]]:
+    """Busca devoluções (P22) de UMA placa. Retorna (placa, lista)."""
+    params = {
+        "filter[UF_CRM_1749815964662]": placa,
+        "filter[CATEGORY_ID]": PIPELINE_DEVOLUCAO,
+        "select[]": [
+            "ID", "TITLE", "CONTACT_ID",
+            "UF_CRM_1749815964662",   # Placa
+            "UF_CRM_1758565735272",   # Data devolução
+        ],
+    }
+    deals = _call_list("crm.deal.list", params)
+    devs = []
+    for d in deals:
+        data_dev = _parse_date(d.get("UF_CRM_1758565735272"))
+        if data_dev:
+            devs.append({
+                "id": int(d["ID"]),
+                "titulo": d.get("TITLE", ""),
+                "placa": placa,
+                "data_devolucao": data_dev,
+                "contact_id": int(d["CONTACT_ID"]) if d.get("CONTACT_ID") else None,
+            })
+    return placa, devs
+
+
 def buscar_devolucoes_por_placas(placas: list[str]) -> dict[str, list[dict]]:
     """Busca deals de devolução no Pipeline 22 para as placas informadas.
 
     Retorna dict[placa, lista de devoluções] com data_devolucao e titulo.
-    Cada placa pode ter múltiplas devoluções (locatários diferentes ao longo do tempo).
+    Faz N chamadas paralelas (uma por placa única) — ordens de magnitude
+    mais rápido que o loop sequencial original.
     """
     if not placas:
         return {}
 
+    placas_unicas = [p for p in set(placas) if p]
+    if not placas_unicas:
+        return {}
+
     resultado: dict[str, list[dict]] = {}
-
-    for placa in set(placas):
-        if not placa:
-            continue
-
-        params = {
-            "filter[UF_CRM_1749815964662]": placa,
-            "filter[CATEGORY_ID]": PIPELINE_DEVOLUCAO,
-            "select[]": [
-                "ID", "TITLE", "CONTACT_ID",
-                "UF_CRM_1749815964662",   # Placa
-                "UF_CRM_1758565735272",   # Data devolução
-            ],
-        }
-        deals = _call_list("crm.deal.list", params)
-
-        devs = []
-        for d in deals:
-            data_dev = _parse_date(d.get("UF_CRM_1758565735272"))
-            if data_dev:
-                devs.append({
-                    "id": int(d["ID"]),
-                    "titulo": d.get("TITLE", ""),
-                    "placa": placa,
-                    "data_devolucao": data_dev,
-                    "contact_id": int(d["CONTACT_ID"]) if d.get("CONTACT_ID") else None,
-                })
-        if devs:
-            resultado[placa] = devs
+    # 12 workers — Bitrix aguenta bem; rede é o limite, não CPU.
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        for placa, devs in ex.map(_devolucoes_de_placa, placas_unicas):
+            if devs:
+                resultado[placa] = devs
 
     return resultado
 

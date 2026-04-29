@@ -95,3 +95,63 @@ class RelatorioData:
     negocios_encerrados: int
     itens: list[ComissaoItem] = field(default_factory=list)
     total_comissao: Decimal = Decimal("0")
+
+
+# ─── Dashboard (ótica diferente do relatório) ──────────────────────────
+@dataclass(frozen=True)
+class CaptacaoItem:
+    """Uma captação (deal fechado) num mês calendário — para o dashboard.
+
+    Diferente de `ComissaoItem`: não tem valor de comissão, é só sobre o ato
+    de captar (o vendedor fechou um negócio, independente de quando paga).
+    """
+    deal_id: int
+    tipo_operacao: str  # "Locação" | "Venda 0km"
+    nome_cliente: str
+    placa: Optional[str]
+    data_locacao: Optional[date]
+    data_devolucao: Optional[date] = None
+    devolvido: bool = False
+
+
+@dataclass(frozen=True)
+class CaptacoesVendedor:
+    """Captações de um vendedor num mês calendário."""
+    vendedor_id: int
+    nome: str
+    itens: list[CaptacaoItem] = field(default_factory=list)
+
+    @property
+    def total(self) -> int:
+        return len(self.itens)
+
+    @property
+    def devolvidos(self) -> int:
+        return sum(1 for i in self.itens if i.devolvido)
+
+
+@dataclass(frozen=True)
+class CaptacoesMes:
+    """Snapshot de captações da empresa num mês calendário."""
+    mes: date  # primeiro dia do mês
+    total_empresa: int  # captações de TODOS (vendedores + outros assigned)
+    locacoes_total: int = 0
+    vendas_total: int = 0
+    # Mapa dia (1..31) -> captações do time naquele dia
+    captacoes_por_dia: dict[int, int] = field(default_factory=dict)
+    por_vendedor: list[CaptacoesVendedor] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class CaptacoesComparadas:
+    """Snapshot comparativo: mês atual vs mês anterior + projeção."""
+    atual: CaptacoesMes
+    anterior: CaptacoesMes
+    # Projeção do mês atual = parcial / du_decorridos × du_mes_total
+    projecao_total: int
+    projecao_locacoes: int
+    projecao_vendas: int
+    # Dias úteis ponderados (regra Seg=1, Sáb=0.5, Dom=0, Feriado=0)
+    du_mes_atual: float
+    du_decorridos_atual: float
+    du_mes_anterior: float

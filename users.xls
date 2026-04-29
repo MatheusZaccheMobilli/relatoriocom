@@ -1,0 +1,459 @@
+<div id="comp_191faf026568bc57b34972487e827413"><html>
+<head>
+	<title></title>
+	<meta http-equiv="Content-Type" content="text/html; charset='UTF-8'">
+	<style>
+		td {mso-number-format:\@;}
+		.number0 {mso-number-format:0;}
+		.number2 {mso-number-format:Fixed;}
+	</style>
+</head>
+<body>
+	<table border="1">
+		<!-- columns -->
+		<tr>
+							<th>Colaborador</th>
+							<th>Departamento</th>
+							<th>E-mail</th>
+							<th>Celular</th>
+							<th>Data da última atividade</th>
+							<th>Aplicativo móvel</th>
+							<th>Aplicativo de desktop</th>
+							<th>ID</th>
+					</tr>
+
+		<!-- rows -->
+											<tr>
+														<td>Mobilli</td>
+														<td>SHALOM, Robôs</td>
+														<td>contato@visioncwb.com.br</td>
+														<td>+55 41 98535-9917</td>
+														<td>19/9/2024, 17:15</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>14</td>
+							</tr>
+								<tr>
+														<td>Jonis Cavallini</td>
+														<td>SHALOM, MOBILLI</td>
+														<td>jonis.cavallini@shalombr.com.br</td>
+														<td>+55 27 99820-9073</td>
+														<td>29/4/2026, 14:43</td>
+														<td>iOS</td>
+														<td>Windows</td>
+														<td>22</td>
+							</tr>
+								<tr>
+														<td>Suporte Atlaas</td>
+														<td>SHALOM, Terceiros</td>
+														<td>suporte@atlaas.com.br</td>
+														<td></td>
+														<td>18/12/2025, 12:03</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>299</td>
+							</tr>
+								<tr>
+														<td>Usuário de Testes Br24</td>
+														<td>SHALOM</td>
+														<td>help@br24.io</td>
+														<td></td>
+														<td>4/2/2026, 15:44</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>9170</td>
+							</tr>
+								<tr>
+														<td>Melissa Belmok</td>
+														<td>SHALOM, Imobiliária Donnabel, Nova Brasil</td>
+														<td>melissa.belmok@donnabel.com.br</td>
+														<td></td>
+														<td>9/1/2026, 10:31</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>33952</td>
+							</tr>
+								<tr>
+														<td>Egnner Bruno Diolino Santos</td>
+														<td>SHALOM, MOBILLI, TI</td>
+														<td>bruno.santos@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td>Android</td>
+														<td>Windows</td>
+														<td>34906</td>
+							</tr>
+								<tr>
+														<td>Robô Mobílli</td>
+														<td>SHALOM, Robôs, TI</td>
+														<td>suporte@mobillirentals.com.br</td>
+														<td></td>
+														<td>17/4/2026, 16:17</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>39542</td>
+							</tr>
+								<tr>
+														<td>Br 24 Suporte</td>
+														<td>SHALOM, MOBILLI</td>
+														<td>ism01@br24.io</td>
+														<td></td>
+														<td>1/4/2026, 16:55</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>72348</td>
+							</tr>
+								<tr>
+														<td>Gustavo Vasquez</td>
+														<td>SHALOM, MOBILLI, TI</td>
+														<td>gustavo.vasquez@mobillirentals.com.br</td>
+														<td></td>
+														<td>24/4/2026, 11:45</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>76914</td>
+							</tr>
+								<tr>
+														<td>Leonardo Lima</td>
+														<td>SHALOM, TI</td>
+														<td>leonardo.lima@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:38</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>79976</td>
+							</tr>
+								<tr>
+														<td>Paulo Henrique Silva Cardoso</td>
+														<td>SHALOM, Vendas</td>
+														<td>paulo.cardoso@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 13:46</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>83518</td>
+							</tr>
+								<tr>
+														<td>Eneilson Gomes da Hora</td>
+														<td>SHALOM, Frota</td>
+														<td>eneilson.gomes@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>83524</td>
+							</tr>
+								<tr>
+														<td>Matheus Zacche Caetano</td>
+														<td>SHALOM, Maketing</td>
+														<td>matheus.zacche@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td>iOS</td>
+														<td>Windows</td>
+														<td>84732</td>
+							</tr>
+								<tr>
+														<td>Samanta Dutra da Costa</td>
+														<td>SHALOM, Operacional</td>
+														<td>samanta.costa@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>91390</td>
+							</tr>
+								<tr>
+														<td>Kamila Nery Bighi</td>
+														<td>SHALOM, Maketing</td>
+														<td>kayenemarketing@gmail.com</td>
+														<td></td>
+														<td>21/4/2026, 21:30</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>91396</td>
+							</tr>
+								<tr>
+														<td>Kaian Paganini Belmok</td>
+														<td>MOBILLI</td>
+														<td>kaian.belmok@mobillirentals.com.br</td>
+														<td>+55 27 99980-2333</td>
+														<td>29/4/2026, 14:39</td>
+														<td>iOS</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>24</td>
+							</tr>
+								<tr>
+														<td>Omar Antonio Díaz Peña</td>
+														<td>TI</td>
+														<td>omar.pena@mobillirentals.com.br</td>
+														<td></td>
+														<td>20/4/2026, 20:16</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>72008</td>
+							</tr>
+								<tr>
+														<td>Thiago Calmon</td>
+														<td>Vendas</td>
+														<td>thiago.vasconcelos@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:18</td>
+														<td>iOS</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>49580</td>
+							</tr>
+								<tr>
+														<td>Ellen Mattos</td>
+														<td>Vendas</td>
+														<td>cleysielen.mattos@mobillirentals.com.br</td>
+														<td></td>
+														<td>14/4/2026, 17:04</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>83302</td>
+							</tr>
+								<tr>
+														<td>Glacio Santos Dapieve</td>
+														<td>Vendas</td>
+														<td>glacio.dapieve@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>83700</td>
+							</tr>
+								<tr>
+														<td>Livia Ferreira Franco Carlini</td>
+														<td>MOBILLI, Maketing</td>
+														<td>livia.carlini@mobillirentals.com.br</td>
+														<td></td>
+														<td>28/4/2026, 10:31</td>
+														<td>iOS</td>
+														<td>Windows</td>
+														<td>71706</td>
+							</tr>
+								<tr>
+														<td>Contato Mobilli</td>
+														<td>Robôs</td>
+														<td>contato@mobillirentals.com.br</td>
+														<td></td>
+														<td>15/2/2025, 22:55</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>1446</td>
+							</tr>
+								<tr>
+														<td>Gilmara Lemos</td>
+														<td>RH / DP</td>
+														<td>gilmara.lemos@shalombr.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>20</td>
+							</tr>
+								<tr>
+														<td>Karina Martins</td>
+														<td>Financeiro</td>
+														<td>karina.martins@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>Windows</td>
+														<td>42</td>
+							</tr>
+								<tr>
+														<td>Marcielly Sperandio dos Santos Barbosa</td>
+														<td>Pós Vendas</td>
+														<td>marcielly.sperandio@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>88100</td>
+							</tr>
+								<tr>
+														<td>Rosileni Paganini</td>
+														<td>MOBILLI, Financeiro</td>
+														<td>financeiro@lgm-consultoria.com</td>
+														<td></td>
+														<td>9/7/2024, 17:09</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>48</td>
+							</tr>
+								<tr>
+														<td>Stéfani Nunes Brito</td>
+														<td>Financeiro</td>
+														<td>stefani.brito@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>Windows</td>
+														<td>52</td>
+							</tr>
+								<tr>
+														<td>Yasmin Juliao</td>
+														<td>Pós Vendas</td>
+														<td>yasmin.juliao@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>222</td>
+							</tr>
+								<tr>
+														<td>Barbara Vasconcelos Loiola</td>
+														<td>RH / DP</td>
+														<td>barbara.vasconcelos@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>83514</td>
+							</tr>
+								<tr>
+														<td>Juliana de Paula Dos Santos</td>
+														<td>Maketing</td>
+														<td>juliana.santos@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 12:09</td>
+														<td>iOS</td>
+														<td>Windows</td>
+														<td>83352</td>
+							</tr>
+								<tr>
+														<td>Eduardo Pereira</td>
+														<td>Maketing</td>
+														<td>eduardo.pereira@mobillirentals.com.br</td>
+														<td></td>
+														<td>26/8/2024, 9:08</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>428</td>
+							</tr>
+								<tr>
+														<td>Gustavo Oliveira Dalcumune</td>
+														<td>MOBILLI, Operacional</td>
+														<td>gustavo.dalcumune@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td>iOS</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>77836</td>
+							</tr>
+								<tr>
+														<td>Marco Antônio Rodrigues</td>
+														<td>Operacional, Manutenção, Monitoramento</td>
+														<td>marco.rodrigues@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td>iOS</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>40112</td>
+							</tr>
+								<tr>
+														<td>Wermeson do Carmo Pereira</td>
+														<td>Recolhimento</td>
+														<td>wermeson.pereira@mobillirentals.com.br</td>
+														<td></td>
+														<td></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>72540</td>
+							</tr>
+								<tr>
+														<td>Financeiro Mobilli</td>
+														<td>Financeiro</td>
+														<td>financeiro@mobillirentals.com.br</td>
+														<td></td>
+														<td>16/8/2024, 8:49</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>1494</td>
+							</tr>
+								<tr>
+														<td>Hamayra Dhamya Dantas da Silva</td>
+														<td>Financeiro</td>
+														<td>hamayra.silva@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>9856</td>
+							</tr>
+								<tr>
+														<td>Wagner Abrantes</td>
+														<td>MOBILLI, Operacional</td>
+														<td>wagner.abrantes@mobillirentals.com.br</td>
+														<td>+55 92 98821-2421</td>
+														<td>29/4/2026, 12:06</td>
+														<td>Android</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>68968</td>
+							</tr>
+								<tr>
+														<td>Bianca Pinheiro Medina</td>
+														<td>Logística</td>
+														<td>bianca.pinheiro@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 14:43</td>
+														<td>Android</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>68018</td>
+							</tr>
+								<tr>
+														<td>Djalma Júnior Mariano Oliveira</td>
+														<td>TI</td>
+														<td>djalma.junior@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 12:05</td>
+														<td>iOS</td>
+														<td>MacOS</td>
+														<td>67270</td>
+							</tr>
+								<tr>
+														<td>Rafael Ribeiro Alves</td>
+														<td>MOBILLI, Frota, Operacional</td>
+														<td>rafael.ribeiro@mobillirentals.com.br</td>
+														<td></td>
+														<td>29/4/2026, 12:21</td>
+														<td>iOS</td>
+														<td>Windows</td>
+														<td>57860</td>
+							</tr>
+								<tr>
+														<td>Zilda Silva</td>
+														<td>Financeiro</td>
+														<td>zilda.silva@mobillirentals.com.br</td>
+														<td>+55 31 99837-4174</td>
+														<td>29/4/2026, 14:43</td>
+														<td>Android</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>33224</td>
+							</tr>
+								<tr>
+														<td>Dukar</td>
+														<td>Terceiros</td>
+														<td>multas@dukar.com.br</td>
+														<td></td>
+														<td>29/4/2026, 12:17</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>46122</td>
+							</tr>
+								<tr>
+														<td>Leandro Belmok Neto</td>
+														<td>Imobiliária Donnabel</td>
+														<td>leandro.belmok@donnabel.com.br</td>
+														<td></td>
+														<td>28/1/2026, 16:59</td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td><span class="ui-color-light">Não instalado</span></td>
+														<td>45102</td>
+							</tr>
+			</table>
+</body>
+</html>
+</div>

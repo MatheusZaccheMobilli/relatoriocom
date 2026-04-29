@@ -2,6 +2,8 @@
 .env
 *.secrets.toml
 secrets_streamlit.txt
+.streamlit/secrets.toml
+client_secret*.json
 
 # Cache Python
 __pycache__/

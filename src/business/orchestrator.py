@@ -1,13 +1,25 @@
 """Orquestrador — conecta dados do Bitrix + MicroWork e monta o RelatorioData."""
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from dateutil.relativedelta import relativedelta
 
-from src.models import ComissaoItem, Deal, Pagamento, RelatorioData, Vendedor
+from src.models import (
+    CaptacaoItem,
+    CaptacoesComparadas,
+    CaptacoesMes,
+    CaptacoesVendedor,
+    ComissaoItem,
+    Deal,
+    Pagamento,
+    RelatorioData,
+    Vendedor,
+)
 from src.data import bitrix, microwork
 from src.business.comissao import calcular_nivel, calcular_comissao
+from src.business.dias_uteis import du_ate_hoje, du_mes
 
 
 # Padrão do documento MicroWork para boletos de aluguel:
@@ -367,4 +379,280 @@ def montar_relatorio(
         negocios_encerrados=negocios_encerrados,
         itens=itens,
         total_comissao=total_comissao,
+    )
+
+
+# ─── Dashboard ─────────────────────────────────────────────────────────
+def _deals_captados_no_mes(mes_captacao: date) -> list[Deal]:
+    """Busca todos os deals (Locação P48+P0 dedup, Venda P40) com data de
+    captação dentro do mês calendário."""
+    inicio = _primeiro_dia_mes(mes_captacao)
+    fim = _ultimo_dia_mes(mes_captacao)
+
+    deals_loc_app = bitrix.buscar_deals(bitrix.PIPELINE_LOCACAO, inicio, fim)
+    deals_loc_showroom = bitrix.buscar_deals(bitrix.PIPELINE_LOCACAO_SHOWROOM, inicio, fim)
+    deals_locacao = _dedup_locacao(deals_loc_app + deals_loc_showroom)
+    deals_venda = bitrix.buscar_deals(bitrix.PIPELINE_VENDA, inicio, fim)
+
+    return deals_locacao + deals_venda
+
+
+def captacoes_no_mes(
+    mes_captacao: date,
+    vendedores: dict[int, str],
+) -> CaptacoesMes:
+    """Snapshot do dashboard — captações da empresa no mês calendário.
+
+    Diferente de `montar_relatorio` (mês de pagamento, M-1/M-2 lookback):
+    aqui o filtro é mês de captação puro. Filtrar abril/2026 retorna só
+    deals com data_locacao em 01/04 a 30/04.
+
+    Não toca no MicroWork — é um agregado leve (Bitrix only).
+    """
+    todos_deals = _deals_captados_no_mes(mes_captacao)
+
+    # Devoluções pelas placas dos deals captados
+    placas = [d.placa for d in todos_deals if d.placa]
+    devolucoes_por_placa = bitrix.buscar_devolucoes_por_placas(placas) if placas else {}
+
+    # Totais empresa-wide por tipo
+    locacoes_total = sum(
+        1 for d in todos_deals
+        if d.pipeline_id in (bitrix.PIPELINE_LOCACAO, bitrix.PIPELINE_LOCACAO_SHOWROOM)
+    )
+    vendas_total = sum(1 for d in todos_deals if d.pipeline_id == bitrix.PIPELINE_VENDA)
+
+    # Captações do TIME por dia do mês (1..31)
+    captacoes_por_dia: dict[int, int] = {}
+    for d in todos_deals:
+        if d.assigned_by_id in vendedores and d.data_locacao:
+            dia = d.data_locacao.day
+            captacoes_por_dia[dia] = captacoes_por_dia.get(dia, 0) + 1
+
+    # Agrupa por vendedor (só os que estão no mapa de ativos)
+    por_vid: dict[int, list[CaptacaoItem]] = {vid: [] for vid in vendedores}
+
+    for d in todos_deals:
+        if d.assigned_by_id not in vendedores:
+            continue
+
+        # Detecta devolução: placa coincide + contato coincide + posterior à locação
+        deal_devolvido = False
+        data_dev: date | None = None
+        if d.placa and d.data_locacao and d.placa in devolucoes_por_placa:
+            posteriores = [
+                dev for dev in devolucoes_por_placa[d.placa]
+                if dev["data_devolucao"] > d.data_locacao
+                and dev.get("contact_id") == d.contact_id
+            ]
+            if posteriores:
+                mais_proxima = min(posteriores, key=lambda x: x["data_devolucao"])
+                deal_devolvido = True
+                data_dev = mais_proxima["data_devolucao"]
+
+        por_vid[d.assigned_by_id].append(CaptacaoItem(
+            deal_id=d.id,
+            tipo_operacao=_tipo_operacao_do_pipeline(d.pipeline_id),
+            nome_cliente=d.titulo,
+            placa=d.placa or None,
+            data_locacao=d.data_locacao,
+            data_devolucao=data_dev,
+            devolvido=deal_devolvido,
+        ))
+
+    por_vendedor = [
+        CaptacoesVendedor(
+            vendedor_id=vid,
+            nome=nome,
+            itens=sorted(itens, key=lambda i: i.data_locacao or date.min, reverse=True),
+        )
+        for vid, nome in vendedores.items()
+        for itens in [por_vid[vid]]
+    ]
+
+    return CaptacoesMes(
+        mes=_primeiro_dia_mes(mes_captacao),
+        total_empresa=len(todos_deals),
+        locacoes_total=locacoes_total,
+        vendas_total=vendas_total,
+        captacoes_por_dia=captacoes_por_dia,
+        por_vendedor=por_vendedor,
+    )
+
+
+def _projetar(parcial: int, du_decorridos: float, du_total: float) -> int:
+    """Projeta um total de mês a partir do parcial e dos dias úteis decorridos."""
+    if du_decorridos <= 0:
+        return parcial
+    return int(round(parcial / du_decorridos * du_total))
+
+
+def _fetch_deals_paralelo(meses: list[date]) -> dict[date, list[Deal]]:
+    """Busca deals (P48 + P0 dedup + P40) para vários meses em paralelo.
+
+    Faz 3 chamadas Bitrix POR mês, todas disparadas simultaneamente.
+    Para 2 meses = 6 chamadas paralelas em vez de 6 sequenciais.
+    """
+    janelas: list[tuple[date, int, date, date]] = []
+    for mes in meses:
+        ini = _primeiro_dia_mes(mes)
+        fim = _ultimo_dia_mes(mes)
+        for pid in (
+            bitrix.PIPELINE_LOCACAO,
+            bitrix.PIPELINE_LOCACAO_SHOWROOM,
+            bitrix.PIPELINE_VENDA,
+        ):
+            janelas.append((mes, pid, ini, fim))
+
+    def _do(args):
+        mes, pid, ini, fim = args
+        return mes, pid, bitrix.buscar_deals(pid, ini, fim)
+
+    out: dict[date, dict[int, list[Deal]]] = {m: {} for m in meses}
+    with ThreadPoolExecutor(max_workers=len(janelas)) as ex:
+        for mes, pid, deals in ex.map(_do, janelas):
+            out[mes][pid] = deals
+
+    final: dict[date, list[Deal]] = {}
+    for mes in meses:
+        loc = _dedup_locacao(
+            out[mes][bitrix.PIPELINE_LOCACAO]
+            + out[mes][bitrix.PIPELINE_LOCACAO_SHOWROOM]
+        )
+        venda = out[mes][bitrix.PIPELINE_VENDA]
+        final[mes] = loc + venda
+    return final
+
+
+def _build_captacoes_mes_de_deals(
+    mes_captacao: date,
+    todos_deals: list[Deal],
+    devolucoes_por_placa: dict[str, list[dict]],
+    vendedores: dict[int, str],
+) -> CaptacoesMes:
+    """Variante de `captacoes_no_mes` que recebe deals + devoluções já buscados.
+
+    Permite reutilizar buscas paralelizadas (atual + anterior compartilham
+    o pool de devoluções).
+    """
+    locacoes_total = sum(
+        1 for d in todos_deals
+        if d.pipeline_id in (bitrix.PIPELINE_LOCACAO, bitrix.PIPELINE_LOCACAO_SHOWROOM)
+    )
+    vendas_total = sum(1 for d in todos_deals if d.pipeline_id == bitrix.PIPELINE_VENDA)
+
+    # Captações por dia — empresa toda (não só o time conhecido)
+    captacoes_por_dia: dict[int, int] = {}
+    for d in todos_deals:
+        if d.data_locacao:
+            dia = d.data_locacao.day
+            captacoes_por_dia[dia] = captacoes_por_dia.get(dia, 0) + 1
+
+    # Auto-descobre TODOS os captadores que aparecem nos deals
+    captadores_ids: set[int] = {d.assigned_by_id for d in todos_deals if d.assigned_by_id}
+    por_vid: dict[int, list[CaptacaoItem]] = {vid: [] for vid in captadores_ids}
+
+    for d in todos_deals:
+        if not d.assigned_by_id:
+            continue
+
+        deal_devolvido = False
+        data_dev: date | None = None
+        if d.placa and d.data_locacao and d.placa in devolucoes_por_placa:
+            posteriores = [
+                dev for dev in devolucoes_por_placa[d.placa]
+                if dev["data_devolucao"] > d.data_locacao
+                and dev.get("contact_id") == d.contact_id
+            ]
+            if posteriores:
+                mais_proxima = min(posteriores, key=lambda x: x["data_devolucao"])
+                deal_devolvido = True
+                data_dev = mais_proxima["data_devolucao"]
+
+        por_vid[d.assigned_by_id].append(CaptacaoItem(
+            deal_id=d.id,
+            tipo_operacao=_tipo_operacao_do_pipeline(d.pipeline_id),
+            nome_cliente=d.titulo,
+            placa=d.placa or None,
+            data_locacao=d.data_locacao,
+            data_devolucao=data_dev,
+            devolvido=deal_devolvido,
+        ))
+
+    # Nome: VENDEDORES → LIDERES → fallback "Consultor #ID"
+    por_vendedor = [
+        CaptacoesVendedor(
+            vendedor_id=vid,
+            nome=vendedores.get(vid, f"Consultor #{vid}"),
+            itens=sorted(por_vid[vid], key=lambda i: i.data_locacao or date.min, reverse=True),
+        )
+        for vid in sorted(captadores_ids, key=lambda v: -len(por_vid[v]))
+    ]
+
+    return CaptacoesMes(
+        mes=_primeiro_dia_mes(mes_captacao),
+        total_empresa=len(todos_deals),
+        locacoes_total=locacoes_total,
+        vendas_total=vendas_total,
+        captacoes_por_dia=captacoes_por_dia,
+        por_vendedor=por_vendedor,
+    )
+
+
+def captacoes_comparadas(
+    mes_atual: date,
+    vendedores: dict[int, str],
+    hoje: date | None = None,
+) -> CaptacoesComparadas:
+    """Compara captações do mês atual com o mês anterior + projeção.
+
+    Performance: 6 chamadas Bitrix de deals em paralelo + 1 chamada
+    consolidada de devoluções (já paralelizada internamente por placa).
+    """
+    if hoje is None:
+        hoje = date.today()
+
+    mes_anterior = (mes_atual - relativedelta(months=1)).replace(day=1)
+
+    # 1. Busca deals dos 2 meses em paralelo (6 chamadas Bitrix simultâneas)
+    deals_por_mes = _fetch_deals_paralelo([mes_atual, mes_anterior])
+
+    # 2. Devoluções: consolida placas dos 2 meses numa única chamada
+    todas_placas = [
+        d.placa
+        for ds in deals_por_mes.values()
+        for d in ds
+        if d.placa
+    ]
+    devolucoes_por_placa = (
+        bitrix.buscar_devolucoes_por_placas(todas_placas) if todas_placas else {}
+    )
+
+    atual = _build_captacoes_mes_de_deals(
+        mes_atual, deals_por_mes[mes_atual], devolucoes_por_placa, vendedores,
+    )
+    anterior = _build_captacoes_mes_de_deals(
+        mes_anterior, deals_por_mes[mes_anterior], devolucoes_por_placa, vendedores,
+    )
+
+    du_total = du_mes(mes_atual)
+    du_total_ant = du_mes(mes_anterior)
+
+    # Se o mês escolhido já é passado, du_decorridos = du_total (sem projeção)
+    fim_mes = _ultimo_dia_mes(mes_atual)
+    if hoje >= fim_mes:
+        du_decorridos = du_total
+    else:
+        du_decorridos = du_ate_hoje(mes_atual, hoje)
+
+    # Projeções a partir do EMPRESA total (não só time conhecido)
+    return CaptacoesComparadas(
+        atual=atual,
+        anterior=anterior,
+        projecao_total=_projetar(atual.total_empresa, du_decorridos, du_total),
+        projecao_locacoes=_projetar(atual.locacoes_total, du_decorridos, du_total),
+        projecao_vendas=_projetar(atual.vendas_total, du_decorridos, du_total),
+        du_mes_atual=du_total,
+        du_decorridos_atual=du_decorridos,
+        du_mes_anterior=du_total_ant,
     )
