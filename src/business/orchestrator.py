@@ -33,7 +33,7 @@ def _normalize_cpf(raw: str) -> str:
 
 
 def _tipo_operacao_do_pipeline(pipeline_id: int) -> str:
-    if pipeline_id == bitrix.PIPELINE_LOCACAO:
+    if pipeline_id in (bitrix.PIPELINE_LOCACAO, bitrix.PIPELINE_LOCACAO_SHOWROOM):
         return "Locação"
     if pipeline_id == bitrix.PIPELINE_VENDA:
         return "Venda 0km"  # TODO: distinguir 0km vs Usado
@@ -106,17 +106,57 @@ def _mes_base_parcela(data_locacao: date, parcela: str) -> date:
     return data_locacao
 
 
+def _dedup_locacao(deals: list[Deal]) -> list[Deal]:
+    """Remove duplicatas de locação por (CPF, placa).
+
+    Mesmo (CPF, placa) em P48 (APP) e P0 (Showroom) = mesmo deal cadastrado em
+    dois lugares. Mantém o do P48 (fluxo principal).
+
+    Deals sem CPF ou sem placa não são deduplicados (mantidos individualmente).
+    """
+    PRIORIDADE = {bitrix.PIPELINE_LOCACAO: 0, bitrix.PIPELINE_LOCACAO_SHOWROOM: 1}
+
+    by_key: dict[tuple[str, str], Deal] = {}
+    sem_chave: list[Deal] = []
+
+    for d in deals:
+        cpf = _normalize_cpf(d.cpf_cnpj_deal)
+        placa = (d.placa or "").strip().upper()
+        if not cpf or not placa:
+            sem_chave.append(d)
+            continue
+        key = (cpf, placa)
+        existente = by_key.get(key)
+        if existente is None:
+            by_key[key] = d
+        elif PRIORIDADE.get(d.pipeline_id, 99) < PRIORIDADE.get(existente.pipeline_id, 99):
+            by_key[key] = d
+
+    return list(by_key.values()) + sem_chave
+
+
 def _buscar_deals_ambos_pipelines(mes_referencia: date) -> list[Deal]:
-    """Busca deals de AMBOS os pipelines para comissão.
+    """Busca deals de TODOS os pipelines de comissão.
+
+    Pipelines:
+      P48 — Locação APP (fluxo principal)
+      P0  — Locação Showroom (presencial)
+      P40 — Venda
 
     Pagamento em mês M:
-      Locação: M-2 (parcela 2/2) e M-1 (parcela 1/2)
-      Venda:   M-1 (parcela 1/1)
+      Locação (P48 + P0): M-2 (parcela 2/2) e M-1 (parcela 1/2)
+      Venda (P40):        M-1 (parcela 1/1)
+
+    Locação é deduplicada por (CPF, placa) com prioridade P48 > P0.
     """
     # Locação: M-2 a M-1
     inicio_loc = _primeiro_dia_mes(mes_referencia - relativedelta(months=2))
     fim_loc = _ultimo_dia_mes(mes_referencia - relativedelta(months=1))
-    deals_locacao = bitrix.buscar_deals(bitrix.PIPELINE_LOCACAO, inicio_loc, fim_loc)
+    deals_locacao_app = bitrix.buscar_deals(bitrix.PIPELINE_LOCACAO, inicio_loc, fim_loc)
+    deals_locacao_showroom = bitrix.buscar_deals(
+        bitrix.PIPELINE_LOCACAO_SHOWROOM, inicio_loc, fim_loc
+    )
+    deals_locacao = _dedup_locacao(deals_locacao_app + deals_locacao_showroom)
 
     # Venda: M-1 (paga no mês seguinte ao fechamento)
     inicio_venda = _primeiro_dia_mes(mes_referencia - relativedelta(months=1))
@@ -127,17 +167,20 @@ def _buscar_deals_ambos_pipelines(mes_referencia: date) -> list[Deal]:
 
 
 def _contar_deals_geral_mes(mes_referencia: date) -> int:
-    """Conta o total de deals WON em M-1 (ambos pipelines, todos vendedores).
+    """Conta o total de deals WON em M-1 (todos pipelines, todos vendedores).
 
     Meta é mensal: pagamento em maio → nível baseado nos deals de abril (M-1).
+    Locação é deduplicada (P48 vs P0) por (CPF, placa).
     """
     inicio = _primeiro_dia_mes(mes_referencia - relativedelta(months=1))
     fim = _ultimo_dia_mes(mes_referencia - relativedelta(months=1))
 
-    deals_loc = bitrix.buscar_deals(bitrix.PIPELINE_LOCACAO, inicio, fim)
+    deals_loc_app = bitrix.buscar_deals(bitrix.PIPELINE_LOCACAO, inicio, fim)
+    deals_loc_showroom = bitrix.buscar_deals(bitrix.PIPELINE_LOCACAO_SHOWROOM, inicio, fim)
+    deals_locacao = _dedup_locacao(deals_loc_app + deals_loc_showroom)
     deals_venda = bitrix.buscar_deals(bitrix.PIPELINE_VENDA, inicio, fim)
 
-    return len(deals_loc) + len(deals_venda)
+    return len(deals_locacao) + len(deals_venda)
 
 
 def montar_relatorio(

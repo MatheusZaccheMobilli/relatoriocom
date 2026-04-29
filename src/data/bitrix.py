@@ -10,7 +10,8 @@ import requests
 from src.models import Deal, Vendedor
 
 # Pipelines relevantes
-PIPELINE_LOCACAO = 48
+PIPELINE_LOCACAO = 48           # Locação APP (fluxo principal)
+PIPELINE_LOCACAO_SHOWROOM = 0   # Locação Showroom (presencial)
 PIPELINE_VENDA = 40
 
 
@@ -73,7 +74,9 @@ def _normalize_cpf(raw: str | None) -> str:
 def buscar_deals(pipeline_id: int, fecha_inicio: date, fecha_fim: date) -> list[Deal]:
     """Busca deals WON em um pipeline para o período (data de locação/venda)."""
 
-    stage_won = f"C{pipeline_id}:WON"
+    # Pipeline 0 (categoria default) usa stages sem prefixo: "WON"
+    # Pipelines >0 usam stages com prefixo: "C48:WON", "C40:WON", etc.
+    stage_won = "WON" if pipeline_id == 0 else f"C{pipeline_id}:WON"
 
     params = {
         "filter[CATEGORY_ID]": pipeline_id,
