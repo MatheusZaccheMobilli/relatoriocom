@@ -131,19 +131,16 @@ def _tab_origem(itens: list[CaptacaoItem]) -> None:
     ordem = totais["Origem"].tolist()
     total_geral = totais["Captações"].sum()
 
-    # Posição central de cada segmento, pra rótulo branco dentro da barra
-    df_pos = df.copy()
-    df_pos["TipoOrder"] = df_pos["Tipo"].map({"Locação": 0, "Venda": 1})
-    df_pos = df_pos.sort_values(["Origem", "TipoOrder"])
-    df_pos["cumsum"] = df_pos.groupby("Origem")["Captações"].cumsum()
-    df_pos["mid"] = df_pos["cumsum"] - df_pos["Captações"] / 2
+    # Estende o domínio do eixo X pra dar respiro pro rótulo do total
+    x_max = int(totais["Captações"].max() * 1.15) + 2
+    x_scale = alt.Scale(domain=[0, x_max], nice=False)
 
     _md('<div class="mob-section-title">Ranking de origens</div>')
 
     bars = alt.Chart(df).mark_bar(cornerRadiusEnd=3, height=18).encode(
         y=alt.Y("Origem:N", title=None, sort=ordem,
                 axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
-        x=alt.X("Captações:Q", title=None, stack="zero",
+        x=alt.X("Captações:Q", title=None, stack="zero", scale=x_scale,
                 axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
         color=alt.Color(
             "Tipo:N",
@@ -152,28 +149,16 @@ def _tab_origem(itens: list[CaptacaoItem]) -> None:
         ),
         tooltip=["Origem", "Tipo", "Captações"],
     )
-    labels_seg = alt.Chart(df_pos).mark_text(
-        align="center", baseline="middle",
-        color="#ffffff", fontWeight=700, fontSize=11,
-    ).encode(
-        y=alt.Y("Origem:N", sort=ordem),
-        x=alt.X("mid:Q"),
-        text=alt.condition(
-            "datum.Captações >= 2",
-            alt.Text("Captações:Q", format=","),
-            alt.value(""),
-        ),
-    )
     labels_total = alt.Chart(totais).mark_text(
         align="left", baseline="middle", dx=4,
         color="#1a1a1a", fontWeight=700, fontSize=12,
     ).encode(
         y=alt.Y("Origem:N", sort=ordem),
-        x=alt.X("Captações:Q"),
+        x=alt.X("Captações:Q", scale=x_scale),
         text=alt.Text("Captações:Q", format=","),
     )
     chart = (
-        (bars + labels_seg + labels_total)
+        (bars + labels_total)
         .properties(height=max(220, 35 * len(ordem)), background="#ffffff")
         .configure_view(strokeWidth=0)
         .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
@@ -241,19 +226,16 @@ def _tab_geografia(itens: list[CaptacaoItem]) -> None:
     df_top = df[df["Cidade"].isin(ordem)].copy()
     total_top = totais["Captações"].sum()
 
-    # Posição central de cada segmento, pra rótulo branco dentro da barra
-    df_pos = df_top.copy()
-    df_pos["TipoOrder"] = df_pos["Tipo"].map({"Locação": 0, "Venda": 1})
-    df_pos = df_pos.sort_values(["Cidade", "TipoOrder"])
-    df_pos["cumsum"] = df_pos.groupby("Cidade")["Captações"].cumsum()
-    df_pos["mid"] = df_pos["cumsum"] - df_pos["Captações"] / 2
+    # Estende o domínio do eixo X pra dar respiro pro rótulo do total
+    x_max = int(totais["Captações"].max() * 1.15) + 2
+    x_scale = alt.Scale(domain=[0, x_max], nice=False)
 
     _md('<div class="mob-section-title">Top 15 cidades</div>')
 
     bars = alt.Chart(df_top).mark_bar(cornerRadiusEnd=3, height=18).encode(
         y=alt.Y("Cidade:N", title=None, sort=ordem,
                 axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
-        x=alt.X("Captações:Q", title=None, stack="zero",
+        x=alt.X("Captações:Q", title=None, stack="zero", scale=x_scale,
                 axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
         color=alt.Color(
             "Tipo:N",
@@ -262,28 +244,16 @@ def _tab_geografia(itens: list[CaptacaoItem]) -> None:
         ),
         tooltip=["Cidade", "Tipo", "Captações"],
     )
-    labels_seg = alt.Chart(df_pos).mark_text(
-        align="center", baseline="middle",
-        color="#ffffff", fontWeight=700, fontSize=11,
-    ).encode(
-        y=alt.Y("Cidade:N", sort=ordem),
-        x=alt.X("mid:Q"),
-        text=alt.condition(
-            "datum.Captações >= 2",
-            alt.Text("Captações:Q", format=","),
-            alt.value(""),
-        ),
-    )
     labels_total = alt.Chart(totais).mark_text(
         align="left", baseline="middle", dx=4,
         color="#1a1a1a", fontWeight=700, fontSize=12,
     ).encode(
         y=alt.Y("Cidade:N", sort=ordem),
-        x=alt.X("Captações:Q"),
+        x=alt.X("Captações:Q", scale=x_scale),
         text=alt.Text("Captações:Q", format=","),
     )
     chart = (
-        (bars + labels_seg + labels_total)
+        (bars + labels_total)
         .properties(height=max(280, 32 * len(ordem)), background="#ffffff")
         .configure_view(strokeWidth=0)
         .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
