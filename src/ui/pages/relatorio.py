@@ -141,7 +141,7 @@ def render() -> None:
     qtd_meta = st.sidebar.number_input(
         "Meta mensal do vendedor (qtd captações)",
         min_value=0,
-        value=35,
+        value=0,
         step=1,
         help="Bronze < 100% · Prata ≥ 100% · Ouro ≥ 125%",
     )
