@@ -621,16 +621,19 @@ CSS_MOBILLI = """
 def aplicar_css(em_construcao: bool = True) -> None:
     """Aplica o CSS Mobílli.
 
-    Se `em_construcao=False`, oculta o banner amarelo E colapsa o header
-    inteiro (que ficava reservando ~90px vazios no topo).
+    Se `em_construcao=False`, oculta apenas o banner amarelo (mantém a
+    faixa preta do header) e sobe o conteúdo, removendo o gap vazio.
     """
     css = CSS_MOBILLI
     if not em_construcao:
         css = css + (
             "<style>"
+            # Esconde só o texto do banner — header preto continua visível
             'header[data-testid="stHeader"]::before { content: none !important; }'
-            'header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; }'
-            'div[data-testid="stToolbar"] { display: none !important; }'
+            # Reduz o padding-top do bloco principal pra subir o conteúdo
+            '.stMainBlockContainer, [data-testid="stMainBlockContainer"] {'
+            '  padding-top: 1rem !important;'
+            '}'
             "</style>"
         )
     # Tooltip "?" do Streamlit no sidebar — força contraste legível (default era
