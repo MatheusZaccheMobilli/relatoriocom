@@ -77,8 +77,29 @@ CSS_MOBILLI = """
     section[data-testid="stSidebar"] [data-baseweb="select"] [class*="ValueContainer"],
     section[data-testid="stSidebar"] [data-baseweb="select"] input,
     section[data-testid="stSidebar"] [data-baseweb="select"] span { color: #f5f5f5 !important; }
-    /* Input numérico */
-    section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"] input { color: #1a1a1a !important; }
+    /* Input numérico — força fundo branco + texto preto (default herda dark do sidebar) */
+    section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"],
+    section[data-testid="stSidebar"] .stNumberInput div[data-baseweb="input"] {
+        background-color: #ffffff !important;
+        border-color: #d1d5db !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"] input,
+    section[data-testid="stSidebar"] .stNumberInput input {
+        background-color: #ffffff !important;
+        color: #1a1a1a !important;
+        -webkit-text-fill-color: #1a1a1a !important;
+    }
+    /* Botões +/- do stepper */
+    section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"] button,
+    section[data-testid="stSidebar"] .stNumberInput button {
+        background-color: #f3f4f6 !important;
+        color: #1a1a1a !important;
+        border-color: #d1d5db !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"] button:hover,
+    section[data-testid="stSidebar"] .stNumberInput button:hover {
+        background-color: #e5e7eb !important;
+    }
     /* Botão "Atualizar dados" no sidebar — secundário, fundo escuro */
     section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
         background-color: #2a2a2a !important;

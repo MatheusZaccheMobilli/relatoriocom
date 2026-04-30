@@ -1,7 +1,7 @@
 """Página: Dashboard Comercial — comparação mês atual × mês anterior + projeção.
 
 Inspirado no dashboard interno da Mobílli (Apps Script). Quatro tabs:
-Resumo · Evolução · Consultores · Produtividade.
+Resumo · Evolução · Vendedores · Produtividade.
 
 Filtro = mês de captação (deals com data_locacao no mês calendário).
 """
@@ -30,9 +30,19 @@ from src.ui.shared import (
 )
 
 
+def _md(html_str: str) -> None:
+    """Renderiza HTML via st.markdown stripando leading whitespace por linha.
+
+    Streamlit's markdown parser trata 4+ espaços de indentação como bloco de
+    código, fazendo o HTML aparecer cru na tela. Stripar cada linha resolve.
+    """
+    cleaned = "\n".join(line.lstrip() for line in html_str.splitlines() if line.strip())
+    st.markdown(cleaned, unsafe_allow_html=True)
+
+
 # ─── helpers ────────────────────────────────────────────────────────────
 def _eh_nome_desconhecido(nome: str) -> bool:
-    return nome.startswith("Consultor #")
+    return nome.startswith("Vendedor #") or nome.startswith("Consultor #")
 
 
 def _iniciais(nome: str) -> str:
@@ -48,7 +58,7 @@ def _iniciais(nome: str) -> str:
 
 def _primeiro_nome(nome: str) -> str:
     if _eh_nome_desconhecido(nome):
-        return nome  # mantém "Consultor #12345" no eixo do gráfico
+        return nome  # mantém "Vendedor #12345" no eixo do gráfico
     return nome.split()[0] if nome else "?"
 
 
@@ -70,8 +80,7 @@ def _total_emp(snap: CaptacoesMes) -> int:
 
 # ─── header ─────────────────────────────────────────────────────────────
 def _hero(mes: date, atualizado_em: datetime) -> None:
-    st.markdown(
-        f"""
+    _md(f"""
         <div class="mob-hero">
             <div>
                 <h1>Dashboard Comercial</h1>
@@ -82,12 +91,10 @@ def _hero(mes: date, atualizado_em: datetime) -> None:
                 Atualizado {atualizado_em.strftime('%d/%m %H:%M')}
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """)
 
 
-def _highlights(cmp_: CaptacoesComparadas, hoje: date) -> None:
+def _highlights(cmp_: CaptacoesComparadas) -> None:
     """3 destaques no topo: anterior · atual · projeção. Empresa-wide."""
     total_ant = _total_emp(cmp_.anterior)
     total_atual = _total_emp(cmp_.atual)
@@ -96,46 +103,22 @@ def _highlights(cmp_: CaptacoesComparadas, hoje: date) -> None:
     mes_ant = cmp_.anterior.mes
     mes_at = cmp_.atual.mes
 
-    fim_at = (mes_at.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-    # "Em curso" inclui o último dia do mês (hoje ainda pode entrar deals)
-    mes_em_curso = (
-        hoje <= fim_at and hoje.year == mes_at.year and hoje.month == mes_at.month
-    )
-
-    sub_ant = "mês fechado"
-    sub_atual = (
-        f"parcial até {hoje.day:02d}/{mes_at.month:02d}"
-        if mes_em_curso
-        else "mês fechado" if hoje > fim_at else "ainda não iniciado"
-    )
-    sub_proj = (
-        f"estimativa de fechamento — {cmp_.du_decorridos_atual:.1f}/{cmp_.du_mes_atual:.0f} dias úteis decorridos"
-        if mes_em_curso
-        else "mês já fechado — sem projeção"
-    )
-
-    st.markdown(
-        f"""
+    _md(f"""
         <div class="mob-hl-row">
             <div class="mob-hl">
                 <div class="mob-hl-lbl">{html.escape(mes_curto(mes_ant))}</div>
                 <div class="mob-hl-val">{total_ant}</div>
-                <div class="mob-hl-sub">{html.escape(sub_ant)}</div>
             </div>
             <div class="mob-hl parcial">
                 <div class="mob-hl-lbl">{html.escape(mes_curto(mes_at))}</div>
                 <div class="mob-hl-val">{total_atual}</div>
-                <div class="mob-hl-sub">{html.escape(sub_atual)}</div>
             </div>
             <div class="mob-hl proj">
                 <div class="mob-hl-lbl">Projeção fim de {html.escape(mes_curto(mes_at))}</div>
                 <div class="mob-hl-val">~{cmp_.projecao_total} {_delta_badge(pct_proj)}</div>
-                <div class="mob-hl-sub">{html.escape(sub_proj)}</div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """)
 
 
 # ─── META + NÍVEL ──────────────────────────────────────────────────────
@@ -207,30 +190,33 @@ def _meta_progresso(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
 
 
 # ─── ABA: RESUMO ────────────────────────────────────────────────────────
-def _bar_comparativa(label: str, valores: dict[str, int], max_val: int) -> str:
-    """Renderiza HTML de uma linha tipo 'Locação' com 3 barras Mar/Abr/Proj."""
-    rows = ""
-    cls_map = {"prev": "prev", "curr": "curr", "proj": "proj"}
-    for nome, valor in valores.items():
-        pct = (valor / max_val * 100) if max_val > 0 else 0
-        cls = cls_map.get(nome, "curr")
-        rows += f"""
-        <div class="mob-cmp-mini">
-            <span>{html.escape(nome.upper())}</span>
-            <span><b>{valor}</b></span>
-        </div>
-        <div class="mob-cmp-bar">
-            <div class="mob-cmp-fill {cls}" style="width:{pct:.1f}%"></div>
-        </div>
-        """
-    return f"""
-    <div class="mob-cmp-row">
-        <div class="mob-cmp-head">
-            <span class="mob-cmp-label">{html.escape(label)}</span>
-        </div>
-        {rows}
-    </div>
+def _bar_comparativa(label: str, barras: list[tuple[str, int, str]], max_val: int) -> str:
+    """Renderiza linha 'Locação' com barras (label, valor, classe-css).
+
+    `barras` é uma lista ordenada de tuplas: ("MAR", 100, "prev"),
+    ("ABR", 89, "curr"), ("PROJEÇÃO", 89, "proj"). A classe define a cor
+    (prev = cinza, curr = laranja, proj = laranja hachurado).
     """
+    parts: list[str] = []
+    for nome, valor, cls in barras:
+        pct = (valor / max_val * 100) if max_val > 0 else 0
+        parts.append(
+            f'<div class="mob-cmp-mini">'
+            f'<span>{html.escape(nome.upper())}</span>'
+            f'<span><b>{valor}</b></span>'
+            f'</div>'
+            f'<div class="mob-cmp-bar">'
+            f'<div class="mob-cmp-fill {cls}" style="width:{pct:.1f}%"></div>'
+            f'</div>'
+        )
+    return (
+        '<div class="mob-cmp-row">'
+        '<div class="mob-cmp-head">'
+        f'<span class="mob-cmp-label">{html.escape(label)}</span>'
+        '</div>'
+        + "".join(parts)
+        + '</div>'
+    )
 
 
 def _tab_resumo(cmp_: CaptacoesComparadas) -> None:
@@ -248,58 +234,53 @@ def _tab_resumo(cmp_: CaptacoesComparadas) -> None:
     # Cards Mar/Abr lado a lado
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(
-            f"""
+        _md(f"""
             <div class="mob-kpi">
                 <div class="mob-kpi-label">Locações {html.escape(nome_ant)} → {html.escape(nome_at)}</div>
                 <div class="mob-kpi-value">{loc_atual} {_delta_badge(pct_loc)}</div>
-                <div class="mob-kpi-help">{loc_ant} em {html.escape(nome_ant)} (cheio)</div>
+                <div class="mob-kpi-help">{loc_ant} em {html.escape(nome_ant)}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """)
     with col2:
-        st.markdown(
-            f"""
+        _md(f"""
             <div class="mob-kpi accent-dark">
                 <div class="mob-kpi-label">Vendas {html.escape(nome_ant)} → {html.escape(nome_at)}</div>
                 <div class="mob-kpi-value">{vnd_atual} {_delta_badge(pct_vnd)}</div>
-                <div class="mob-kpi-help">{vnd_ant} em {html.escape(nome_ant)} (cheio)</div>
+                <div class="mob-kpi-help">{vnd_ant} em {html.escape(nome_ant)}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """)
 
     st.markdown("&nbsp;")
-    st.markdown('<div class="mob-section-title">Comparativo geral (Locação · Venda)</div>',
-                unsafe_allow_html=True)
+    _md('<div class="mob-section-title">Comparativo geral (Locação · Venda)</div>')
 
     max_loc = max(loc_ant, loc_atual, cmp_.projecao_locacoes, 1)
     max_vnd = max(vnd_ant, vnd_atual, cmp_.projecao_vendas, 1)
 
     col_l, col_v = st.columns(2)
     with col_l:
-        st.markdown(
-            _bar_comparativa(
-                "Locação",
-                {nome_ant: loc_ant, nome_at: loc_atual, "Projeção": cmp_.projecao_locacoes},
-                max_loc,
-            ),
-            unsafe_allow_html=True,
-        )
+        _md(_bar_comparativa(
+            "Locação",
+            [
+                (nome_ant, loc_ant, "prev"),
+                (nome_at, loc_atual, "curr"),
+                ("Projeção", cmp_.projecao_locacoes, "proj"),
+            ],
+            max_loc,
+        ))
     with col_v:
-        st.markdown(
-            _bar_comparativa(
-                "Venda",
-                {nome_ant: vnd_ant, nome_at: vnd_atual, "Projeção": cmp_.projecao_vendas},
-                max_vnd,
-            ),
-            unsafe_allow_html=True,
-        )
+        _md(_bar_comparativa(
+            "Venda",
+            [
+                (nome_ant, vnd_ant, "prev"),
+                (nome_at, vnd_atual, "curr"),
+                ("Projeção", cmp_.projecao_vendas, "proj"),
+            ],
+            max_vnd,
+        ))
 
     # Tabela resumo
     st.markdown("&nbsp;")
-    st.markdown('<div class="mob-section-title">Tabela resumo</div>', unsafe_allow_html=True)
+    _md('<div class="mob-section-title">Tabela resumo</div>')
 
     total_ant = loc_ant + vnd_ant
     total_atual = loc_atual + vnd_atual
@@ -310,43 +291,33 @@ def _tab_resumo(cmp_: CaptacoesComparadas) -> None:
         ("Venda", vnd_ant, vnd_atual, cmp_.projecao_vendas, pct_vnd),
     ]
 
-    html_rows = ""
-    for nome, ant, at, proj, pct in rows:
-        html_rows += f"""
-        <tr>
-            <td>{html.escape(nome)}</td>
-            <td class="num">{ant}</td>
-            <td class="num">{at}</td>
-            <td class="num">~{proj}</td>
-            <td class="num">{_delta_badge(pct)}</td>
-        </tr>
-        """
-    html_rows += f"""
-    <tr class="total">
-        <td>TOTAL</td>
-        <td class="num">{total_ant}</td>
-        <td class="num">{total_atual}</td>
-        <td class="num">~{cmp_.projecao_total}</td>
-        <td class="num">{_delta_badge(pct_total)}</td>
-    </tr>
-    """
+    body_rows = "".join(
+        f'<tr><td>{html.escape(nome)}</td>'
+        f'<td class="num">{ant}</td>'
+        f'<td class="num">{at}</td>'
+        f'<td class="num">~{proj}</td>'
+        f'<td class="num">{_delta_badge(pct)}</td></tr>'
+        for nome, ant, at, proj, pct in rows
+    )
+    body_rows += (
+        f'<tr class="total"><td>TOTAL</td>'
+        f'<td class="num">{total_ant}</td>'
+        f'<td class="num">{total_atual}</td>'
+        f'<td class="num">~{cmp_.projecao_total}</td>'
+        f'<td class="num">{_delta_badge(pct_total)}</td></tr>'
+    )
 
-    st.markdown(
-        f"""
-        <table class="mob-tab">
-            <thead>
-                <tr>
-                    <th>Modalidade</th>
-                    <th class="num">{html.escape(nome_ant)}</th>
-                    <th class="num">{html.escape(nome_at)} parcial</th>
-                    <th class="num">Projeção</th>
-                    <th class="num">Var.</th>
-                </tr>
-            </thead>
-            <tbody>{html_rows}</tbody>
-        </table>
-        """,
-        unsafe_allow_html=True,
+    _md(
+        '<table class="mob-tab">'
+        '<thead><tr>'
+        '<th>Modalidade</th>'
+        f'<th class="num">{html.escape(nome_ant)}</th>'
+        f'<th class="num">{html.escape(nome_at)} parcial</th>'
+        '<th class="num">Projeção</th>'
+        '<th class="num">Var.</th>'
+        '</tr></thead>'
+        f'<tbody>{body_rows}</tbody>'
+        '</table>'
     )
 
 
@@ -376,38 +347,36 @@ def _tab_evolucao(cmp_: CaptacoesComparadas) -> None:
         {"Dia": d, "Mês": nome_at, "Captações": acum_at.get(d, 0)} for d in dias
     ])
 
-    st.markdown('<div class="mob-section-title">Acumulado dia a dia</div>',
-                unsafe_allow_html=True)
+    _md('<div class="mob-section-title">Acumulado dia a dia</div>')
 
     chart = (
         alt.Chart(df)
         .mark_line(point=alt.OverlayMarkDef(filled=True, size=80), strokeWidth=3)
         .encode(
             x=alt.X("Dia:O", title="Dia",
-                    axis=alt.Axis(labelFontSize=11, domain=False, ticks=False)),
+                    axis=alt.Axis(labelFontSize=11, domain=False, ticks=False, labelColor="#1a1a1a", titleColor="#1a1a1a")),
             y=alt.Y("Captações:Q", title=None,
-                    axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, tickColor="#eef0f3")),
+                    axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, tickColor="#eef0f3", labelColor="#1a1a1a")),
             color=alt.Color(
                 "Mês:N",
                 scale=alt.Scale(
                     domain=[nome_ant, nome_at],
-                    range=["#9ca3af", "#FF6600"],
+                    range=["#6b7280", "#FF6600"],
                 ),
-                legend=alt.Legend(orient="top", title=None, labelFontSize=12),
+                legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a", symbolStrokeWidth=0, symbolSize=200),
             ),
             tooltip=["Mês", "Dia", "Captações"],
         )
-        .properties(height=320)
+        .properties(height=320, background="#ffffff")
         .configure_view(strokeWidth=0)
-        .configure_axis(labelColor="#6b7280", titleColor="#6b7280")
-        .configure_legend(labelColor="#1a1a1a", titleColor="#1a1a1a")
+        .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
+        .configure_legend(labelColor="#1a1a1a", titleColor="#1a1a1a", labelFontSize=13)
     )
     st.altair_chart(chart, use_container_width=True)
 
     # Por semana
     st.markdown("&nbsp;")
-    st.markdown('<div class="mob-section-title">Por semana</div>',
-                unsafe_allow_html=True)
+    _md('<div class="mob-section-title">Por semana</div>')
 
     semanas = [(1, 7), (8, 14), (15, 21), (22, 28), (29, 31)]
     rows_sem = []
@@ -426,25 +395,26 @@ def _tab_evolucao(cmp_: CaptacoesComparadas) -> None:
         alt.Chart(df_sem)
         .mark_bar(cornerRadiusEnd=4)
         .encode(
-            x=alt.X("Semana:N", title=None, axis=alt.Axis(labelAngle=0, domain=False)),
+            x=alt.X("Semana:N", title=None, axis=alt.Axis(labelAngle=0, domain=False, labelColor="#1a1a1a")),
             xOffset="Mês:N",
-            y=alt.Y("Captações:Q", title=None, axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False)),
+            y=alt.Y("Captações:Q", title=None, axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
             color=alt.Color(
                 "Mês:N",
-                scale=alt.Scale(domain=[nome_ant, nome_at], range=["#9ca3af", "#FF6600"]),
-                legend=alt.Legend(orient="top", title=None),
+                scale=alt.Scale(domain=[nome_ant, nome_at], range=["#6b7280", "#FF6600"]),
+                legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
             ),
             tooltip=["Semana", "Mês", "Captações"],
         )
-        .properties(height=240)
+        .properties(height=240, background="#ffffff")
         .configure_view(strokeWidth=0)
-        .configure_axis(labelColor="#6b7280")
+        .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
+        .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
     )
     st.altair_chart(chart_sem, use_container_width=True)
 
 
-# ─── ABA: CONSULTORES ──────────────────────────────────────────────────
-def _card_consultor(
+# ─── ABA: VENDEDORES ──────────────────────────────────────────────────
+def _card_vendedor(
     v_at: CaptacoesVendedor,
     v_ant: CaptacoesVendedor,
     label_ant: str,
@@ -464,8 +434,7 @@ def _card_consultor(
         nome_curto = " ".join(v_at.nome.split()[:2])
         role = "Vendedor"
 
-    st.markdown(
-        f"""
+    _md(f"""
         <div class="mob-vend">
             <div class="mob-vend-head">
                 <div class="{cls_avatar}">{html.escape(_iniciais(v_at.nome))}</div>
@@ -476,7 +445,7 @@ def _card_consultor(
             </div>
             <div class="mob-vend-stats">
                 <div class="mob-vend-stat">
-                    <div class="mob-vend-stat-num" style="color:#9ca3af;">{v_ant.total}</div>
+                    <div class="mob-vend-stat-num" style="color:#6b7280;">{v_ant.total}</div>
                     <div class="mob-vend-stat-lbl">{html.escape(label_ant)}</div>
                 </div>
                 <div class="mob-vend-stat">
@@ -486,12 +455,10 @@ def _card_consultor(
             </div>
             <div style="margin-top:2px;">{_delta_badge(pct)}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    """)
 
 
-def _tab_consultores(cmp_: CaptacoesComparadas) -> None:
+def _tab_vendedores(cmp_: CaptacoesComparadas) -> None:
     nome_ant = mes_curto(cmp_.anterior.mes)
     nome_at = mes_curto(cmp_.atual.mes)
 
@@ -505,42 +472,35 @@ def _tab_consultores(cmp_: CaptacoesComparadas) -> None:
     n_desconhecidos = sum(1 for v in cards if _eh_nome_desconhecido(v.nome))
 
     if cards:
-        # 4 cards por linha
         for i in range(0, len(cards), 4):
             sub_cols = st.columns(4)
             for col, v in zip(sub_cols, cards[i:i + 4]):
                 v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
                 with col:
-                    _card_consultor(v, v_ant, label_ant=nome_ant, label_at=nome_at)
-        # Preenche colunas vazias da última linha pra manter grid
-        resto = (len(cards) % 4)
-        if resto:
-            for _ in range(4 - resto):
-                pass  # streamlit ignora cols vazias
+                    _card_vendedor(v, v_ant, label_ant=nome_ant, label_at=nome_at)
 
     if len(ord_atual) > TOP_N:
-        st.caption(f"Exibindo top {TOP_N} consultores. Restante na tabela abaixo.")
+        st.caption(f"Exibindo top {TOP_N} vendedores. Restante na tabela abaixo.")
 
     if n_desconhecidos:
         st.caption(
-            f"{n_desconhecidos} consultor(es) sem nome cadastrado — "
+            f"{n_desconhecidos} vendedor(es) sem nome cadastrado — "
             "edite `src/auth/vendedores.py` para mapear o ID."
         )
 
     st.markdown("&nbsp;")
 
-    # Barras horizontais por consultor — 2 séries (anterior vs atual). Limita ao top N.
-    st.markdown(
-        f'<div class="mob-section-title">Top {min(TOP_N, len(ord_atual))} consultores — {html.escape(nome_ant)} × {html.escape(nome_at)}</div>',
-        unsafe_allow_html=True,
+    _md(
+        f'<div class="mob-section-title">Top {min(TOP_N, len(ord_atual))} vendedores — '
+        f'{html.escape(nome_ant)} × {html.escape(nome_at)}</div>'
     )
 
     chart_set = ord_atual[:TOP_N]
     rows = []
     for v in chart_set:
         v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
-        rows.append({"Consultor": _primeiro_nome(v.nome), "Mês": nome_ant, "Captações": v_ant.total})
-        rows.append({"Consultor": _primeiro_nome(v.nome), "Mês": nome_at, "Captações": v.total})
+        rows.append({"Vendedor": _primeiro_nome(v.nome), "Mês": nome_ant, "Captações": v_ant.total})
+        rows.append({"Vendedor": _primeiro_nome(v.nome), "Mês": nome_at, "Captações": v.total})
     df = pd.DataFrame(rows)
 
     if not df.empty and df["Captações"].sum() > 0:
@@ -548,64 +508,57 @@ def _tab_consultores(cmp_: CaptacoesComparadas) -> None:
             alt.Chart(df)
             .mark_bar(cornerRadiusEnd=3, height=14)
             .encode(
-                y=alt.Y("Consultor:N", title=None, sort="-x",
-                        axis=alt.Axis(labelFontSize=12, domain=False, ticks=False)),
+                y=alt.Y("Vendedor:N", title=None, sort="-x",
+                        axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
                 yOffset="Mês:N",
                 x=alt.X("Captações:Q", title=None,
-                        axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False)),
+                        axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
                 color=alt.Color(
                     "Mês:N",
-                    scale=alt.Scale(domain=[nome_ant, nome_at], range=["#9ca3af", "#FF6600"]),
-                    legend=alt.Legend(orient="top", title=None, labelFontSize=12),
+                    scale=alt.Scale(domain=[nome_ant, nome_at], range=["#6b7280", "#FF6600"]),
+                    legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
                 ),
-                tooltip=["Consultor", "Mês", "Captações"],
+                tooltip=["Vendedor", "Mês", "Captações"],
             )
-            .properties(height=max(200, 50 * len(chart_set)))
+            .properties(height=max(200, 50 * len(chart_set)), background="#ffffff")
             .configure_view(strokeWidth=0)
-            .configure_axis(labelColor="#6b7280")
+            .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
+            .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
         )
         st.altair_chart(chart, use_container_width=True)
     else:
         st.info("Sem captações no período para comparar.")
 
-    # Tabela completa: Consultor · Ant · Atual · Var. · Loc. · Vnd.
+    # Tabela: Vendedor · Ant · Atual · Var. · Loc. · Vnd.
     st.markdown("&nbsp;")
-    st.markdown('<div class="mob-section-title">Detalhamento</div>', unsafe_allow_html=True)
+    _md('<div class="mob-section-title">Detalhamento</div>')
 
-    html_rows = ""
-    for v in ord_atual:
-        v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
-        loc_v = sum(1 for i in v.itens if i.tipo_operacao == "Locação")
-        vnd_v = v.total - loc_v
-        pct_v = variacao_pct(v.total, v_ant.total)
-        html_rows += f"""
-        <tr>
-            <td>{html.escape(v.nome)}</td>
-            <td class="num">{v_ant.total}</td>
-            <td class="num">{v.total}</td>
-            <td class="num">{_delta_badge(pct_v)}</td>
-            <td class="num">{loc_v}</td>
-            <td class="num">{vnd_v}</td>
-        </tr>
-        """
+    body_rows_v = "".join(
+        (
+            f'<tr><td>{html.escape(v.nome)}</td>'
+            f'<td class="num">{v_ant.total}</td>'
+            f'<td class="num">{v.total}</td>'
+            f'<td class="num">{_delta_badge(variacao_pct(v.total, v_ant.total))}</td>'
+            f'<td class="num">{sum(1 for i in v.itens if i.tipo_operacao == "Locação")}</td>'
+            f'<td class="num">{v.total - sum(1 for i in v.itens if i.tipo_operacao == "Locação")}</td>'
+            f'</tr>'
+        )
+        for v in ord_atual
+        for v_ant in [ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))]
+    )
 
-    st.markdown(
-        f"""
-        <table class="mob-tab">
-            <thead>
-                <tr>
-                    <th>Consultor</th>
-                    <th class="num">{html.escape(nome_ant)}</th>
-                    <th class="num">{html.escape(nome_at)}</th>
-                    <th class="num">Var.</th>
-                    <th class="num">Loc.</th>
-                    <th class="num">Vnd.</th>
-                </tr>
-            </thead>
-            <tbody>{html_rows}</tbody>
-        </table>
-        """,
-        unsafe_allow_html=True,
+    _md(
+        '<table class="mob-tab">'
+        '<thead><tr>'
+        '<th>Vendedor</th>'
+        f'<th class="num">{html.escape(nome_ant)}</th>'
+        f'<th class="num">{html.escape(nome_at)}</th>'
+        '<th class="num">Var.</th>'
+        '<th class="num">Loc.</th>'
+        '<th class="num">Vnd.</th>'
+        '</tr></thead>'
+        f'<tbody>{body_rows_v}</tbody>'
+        '</table>'
     )
 
 
@@ -622,82 +575,66 @@ def _tab_produtividade(cmp_: CaptacoesComparadas) -> None:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown(
-            f"""
+        _md(f"""
             <div class="mob-kpi accent-dark">
                 <div class="mob-kpi-label">Dias úteis</div>
-                <div class="mob-kpi-value">{cmp_.du_decorridos_atual:.1f} <span style="font-size:18px;color:#9ca3af;">/ {cmp_.du_mes_atual:.0f}</span></div>
+                <div class="mob-kpi-value">{cmp_.du_decorridos_atual:.1f} <span style="font-size:18px;color:#6b7280;">/ {cmp_.du_mes_atual:.0f}</span></div>
                 <div class="mob-kpi-help">{html.escape(nome_at)} (decorridos/total)</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """)
     with col2:
-        st.markdown(
-            f"""
+        _md(f"""
             <div class="mob-kpi">
                 <div class="mob-kpi-label">Produtividade {html.escape(nome_ant)}</div>
                 <div class="mob-kpi-value">{prod_ant:.1f}</div>
                 <div class="mob-kpi-help">negócios por dia útil</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """)
     with col3:
-        st.markdown(
-            f"""
+        _md(f"""
             <div class="mob-kpi">
                 <div class="mob-kpi-label">Produtividade {html.escape(nome_at)}</div>
                 <div class="mob-kpi-value">{prod_at:.1f} {_delta_badge(pct_prod)}</div>
                 <div class="mob-kpi-help">negócios por dia útil</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """)
 
     st.markdown("&nbsp;")
-    st.markdown('<div class="mob-section-title">Produtividade por consultor</div>',
-                unsafe_allow_html=True)
+    _md('<div class="mob-section-title">Produtividade por vendedor</div>')
 
     ant_by_id = {v.vendedor_id: v for v in cmp_.anterior.por_vendedor}
     ord_atual = [v for v in cmp_.atual.por_vendedor if v.total > 0]
     ord_atual.sort(key=lambda v: v.total, reverse=True)
 
-    html_rows = ""
+    body_rows_p = ""
     for v in ord_atual:
         v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
         loc_v = sum(1 for i in v.itens if i.tipo_operacao == "Locação")
         vnd_v = v.total - loc_v
         prod_v = v.total / cmp_.du_decorridos_atual if cmp_.du_decorridos_atual else 0
         prod_v_ant = v_ant.total / cmp_.du_mes_anterior if cmp_.du_mes_anterior else 0
-        html_rows += f"""
-        <tr>
-            <td>{html.escape(v.nome)}</td>
-            <td class="num">{v.total}</td>
-            <td class="num">{prod_v:.1f}</td>
-            <td class="num" style="color:#9ca3af;">{prod_v_ant:.1f}</td>
-            <td class="num">{loc_v}</td>
-            <td class="num">{vnd_v}</td>
-        </tr>
-        """
+        body_rows_p += (
+            f'<tr><td>{html.escape(v.nome)}</td>'
+            f'<td class="num">{v.total}</td>'
+            f'<td class="num">{prod_v:.1f}</td>'
+            f'<td class="num" style="color:#6b7280;">{prod_v_ant:.1f}</td>'
+            f'<td class="num">{loc_v}</td>'
+            f'<td class="num">{vnd_v}</td>'
+            f'</tr>'
+        )
 
-    st.markdown(
-        f"""
-        <table class="mob-tab">
-            <thead>
-                <tr>
-                    <th>Consultor</th>
-                    <th class="num">Total {html.escape(nome_at)}</th>
-                    <th class="num">Neg./du {html.escape(nome_at)}</th>
-                    <th class="num">Neg./du {html.escape(nome_ant)}</th>
-                    <th class="num">Loc.</th>
-                    <th class="num">Vnd.</th>
-                </tr>
-            </thead>
-            <tbody>{html_rows}</tbody>
-        </table>
-        """,
-        unsafe_allow_html=True,
+    _md(
+        '<table class="mob-tab">'
+        '<thead><tr>'
+        '<th>Vendedor</th>'
+        f'<th class="num">Total {html.escape(nome_at)}</th>'
+        f'<th class="num">Neg./du {html.escape(nome_at)}</th>'
+        f'<th class="num">Neg./du {html.escape(nome_ant)}</th>'
+        '<th class="num">Loc.</th>'
+        '<th class="num">Vnd.</th>'
+        '</tr></thead>'
+        f'<tbody>{body_rows_p}</tbody>'
+        '</table>'
     )
 
 
@@ -761,18 +698,18 @@ def render() -> None:
         st.stop()
 
     _hero(mes, datetime.now())
-    _highlights(cmp_, hoje)
+    _highlights(cmp_)
     _meta_progresso(cmp_, meta, hoje)
 
-    tab_resumo, tab_evol, tab_cons, tab_prod = st.tabs(
-        ["Resumo", "Evolução", "Consultores", "Produtividade"]
+    tab_resumo, tab_evol, tab_vend, tab_prod = st.tabs(
+        ["Resumo", "Evolução", "Vendedores", "Produtividade"]
     )
 
     with tab_resumo:
         _tab_resumo(cmp_)
     with tab_evol:
         _tab_evolucao(cmp_)
-    with tab_cons:
-        _tab_consultores(cmp_)
+    with tab_vend:
+        _tab_vendedores(cmp_)
     with tab_prod:
         _tab_produtividade(cmp_)

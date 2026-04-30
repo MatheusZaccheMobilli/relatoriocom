@@ -579,11 +579,11 @@ def _build_captacoes_mes_de_deals(
             devolvido=deal_devolvido,
         ))
 
-    # Nome: VENDEDORES → LIDERES → fallback "Consultor #ID"
+    # Nome: VENDEDORES → LIDERES → fallback "Vendedor #ID"
     por_vendedor = [
         CaptacoesVendedor(
             vendedor_id=vid,
-            nome=vendedores.get(vid, f"Consultor #{vid}"),
+            nome=vendedores.get(vid, f"Vendedor #{vid}"),
             itens=sorted(por_vid[vid], key=lambda i: i.data_locacao or date.min, reverse=True),
         )
         for vid in sorted(captadores_ids, key=lambda v: -len(por_vid[v]))
