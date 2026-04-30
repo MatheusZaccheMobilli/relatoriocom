@@ -66,17 +66,28 @@ def captacoes_comparadas_cacheadas(
     )
 
 
+# Bump esta versão SEMPRE que adicionar/remover/renomear campos em
+# CaptacoesMes ou CaptacaoItem — invalida cache stale do Streamlit Cloud
+# (que persiste pickle entre deploys). Schema atual: v3 (captacoes_flat
+# + source_id + cidade + plano_semanal nos itens; faturamento + mix +
+# devolvidos_total + captacoes_flat no snapshot).
+_SCHEMA_VERSION = 3
+
+
 @st.cache_data(ttl=_TTL_SEGUNDOS, show_spinner=False)
 def serie_historica_cacheada(
     mes_floor: date,
     mes_topo: date,
     vendedores_key: tuple[tuple[int, str], ...],
+    schema_version: int = _SCHEMA_VERSION,
 ) -> list[CaptacoesMes]:
     """Versão cacheada de `serie_historica` (5min).
 
     Retorna a série completa de meses entre floor e topo. Usado pelos
-    gráficos históricos (todos os meses desde março).
+    gráficos históricos (todos os meses desde março). `schema_version`
+    entra na chave do cache: bumpar invalida tudo.
     """
+    del schema_version  # apenas pra entrar no hash do cache
     vendedores = dict(vendedores_key)
     return serie_historica(
         mes_floor=mes_floor, mes_topo=mes_topo, vendedores=vendedores

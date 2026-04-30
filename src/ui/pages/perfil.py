@@ -31,10 +31,15 @@ def _md(html_str: str) -> None:
 
 
 def _flatten(serie: list[CaptacoesMes]) -> list[CaptacaoItem]:
-    """Junta captações de todos os meses da série numa lista única."""
+    """Junta captações de todos os meses da série numa lista única.
+
+    Usa `getattr` com default `[]` pra resistir a snapshots antigos vindos
+    de cache do Streamlit Cloud (cache_data persiste pickle entre deploys
+    e instâncias antigas não têm o campo `captacoes_flat`).
+    """
     out: list[CaptacaoItem] = []
     for snap in serie:
-        out.extend(snap.captacoes_flat)
+        out.extend(getattr(snap, "captacoes_flat", []))
     return out
 
 
