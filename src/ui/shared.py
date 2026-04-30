@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 from dateutil.relativedelta import relativedelta
+
+
+# Streamlit Cloud roda em UTC; Mobílli opera em horário de Brasília.
+# Sempre usar `agora_brt()` para timestamps exibidos na UI.
+TZ_BRT = ZoneInfo("America/Sao_Paulo")
+
+
+def agora_brt() -> datetime:
+    """Retorna o datetime atual no fuso de Brasília (America/Sao_Paulo)."""
+    return datetime.now(TZ_BRT)
 
 
 MESES_PT: dict[int, str] = {

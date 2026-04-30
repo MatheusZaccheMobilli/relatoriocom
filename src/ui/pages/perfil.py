@@ -22,7 +22,7 @@ from src.auth import todos_nomes_conhecidos
 from src.data.bitrix import label_source
 from src.models import CaptacaoItem, CaptacoesMes
 from src.ui.data import serie_historica_cacheada
-from src.ui.shared import PRIMEIRO_MES_CAPTACAO, mes_ano_label, mes_curto
+from src.ui.shared import PRIMEIRO_MES_CAPTACAO, agora_brt
 
 
 def _md(html_str: str) -> None:
@@ -53,12 +53,12 @@ def _filtrar_por_tipo(itens: list[CaptacaoItem], tipo: str) -> list[CaptacaoItem
 
 
 # ─── HEADER ─────────────────────────────────────────────────────────────
-def _hero(periodo_label: str, atualizado_em: datetime, total: int) -> None:
+def _hero(atualizado_em: datetime, total: int) -> None:
     _md(f"""
         <div class="mob-hero">
             <div>
                 <h1>Perfil do Cliente</h1>
-                <div class="mob-hero-sub">Mobílli Rentals — análise de origem, geografia e plano · {periodo_label}</div>
+                <div class="mob-hero-sub">Mobílli Rentals · Serra/ES</div>
             </div>
             <div class="mob-hero-meta">
                 <b>{total} captações</b><br/>
@@ -358,16 +358,7 @@ def render() -> None:
     todas = _flatten(serie)
     filtradas = _filtrar_por_tipo(todas, tipo)
 
-    if serie:
-        periodo_label = (
-            f"{mes_curto(serie[0].mes)} → {mes_curto(serie[-1].mes)}"
-            if len(serie) > 1
-            else mes_ano_label(serie[0].mes)
-        )
-    else:
-        periodo_label = "—"
-
-    _hero(periodo_label, datetime.now(), len(filtradas))
+    _hero(agora_brt(), len(filtradas))
     _kpis_topo(filtradas)
     st.markdown("&nbsp;")
 

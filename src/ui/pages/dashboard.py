@@ -24,6 +24,7 @@ from src.models import CaptacoesComparadas, CaptacoesMes, CaptacoesVendedor
 from src.ui.data import limpar_cache, serie_historica_cacheada
 from src.ui.shared import (
     PRIMEIRO_MES_CAPTACAO,
+    agora_brt,
     classe_delta,
     formatar_brl,
     formatar_data,
@@ -100,7 +101,7 @@ def _hero(mes: date, atualizado_em: datetime) -> None:
         <div class="mob-hero">
             <div>
                 <h1>Dashboard Comercial</h1>
-                <div class="mob-hero-sub">Mobílli Rentals — {html.escape(mes_curto(mes - timedelta(days=1)))} vs {html.escape(mes_curto(mes))} · Serra/ES</div>
+                <div class="mob-hero-sub">Mobílli Rentals · Serra/ES</div>
             </div>
             <div class="mob-hero-meta">
                 <b>{html.escape(mes_ano_label(mes))}</b><br/>
@@ -916,7 +917,7 @@ def render() -> None:
             st.rerun()
         st.stop()
 
-    _hero(mes, datetime.now())
+    _hero(mes, agora_brt())
     _highlights(cmp_, meta, hoje)
     _meta_progresso(cmp_, meta, hoje)
 
