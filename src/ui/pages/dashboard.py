@@ -15,7 +15,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from src.auth import LIDERES, VENDEDORES, tem_visao_completa
+from src.auth import papel_por_id, tem_visao_completa, todos_nomes_conhecidos
 from src.models import CaptacoesComparadas, CaptacoesMes, CaptacoesVendedor
 from src.ui.data import captacoes_comparadas_cacheadas, limpar_cache
 from src.ui.shared import (
@@ -427,12 +427,9 @@ def _card_vendedor(
     if _eh_nome_desconhecido(v_at.nome):
         nome_curto = v_at.nome
         role = "Não cadastrado"
-    elif eh_lider:
-        nome_curto = " ".join(v_at.nome.split()[:2])
-        role = "Líder"
     else:
         nome_curto = " ".join(v_at.nome.split()[:2])
-        role = "Vendedor"
+        role = papel_por_id(v_at.vendedor_id) or "Vendedor"
 
     _md(f"""
         <div class="mob-vend">
@@ -670,8 +667,9 @@ def render() -> None:
     st.sidebar.caption("Atualização automática a cada 5 min")
 
     # ── carrega dados ──────────────────────────────────────────────
-    # Inclui ativos + líderes — o restante dos consultores é auto-descoberto.
-    todos_conhecidos = {**VENDEDORES, **LIDERES}
+    # Vendedores ativos + líderes + outros captadores conhecidos (sócio, robô, pós-venda).
+    # IDs sem mapeamento entram como "Vendedor #ID" (auto-descobertos).
+    todos_conhecidos = todos_nomes_conhecidos()
     vendedores_key = tuple(sorted(todos_conhecidos.items()))
     hoje = date.today()
     try:
