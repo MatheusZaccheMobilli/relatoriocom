@@ -760,15 +760,13 @@ def render() -> None:
         opcoes,
         index=0,
         format_func=mes_ano_label,
-        help="Filtra deals fechados nesse mês calendário (data de locação).",
     )
 
     meta = st.sidebar.number_input(
         "Meta do time (qtd captações)",
         min_value=0,
-        value=124,
+        value=0,
         step=1,
-        help="Meta mensal de captações do time. Padrão: 124. Bronze < 100% · Prata ≥ 100% · Ouro ≥ 125%.",
     )
 
     if st.sidebar.button("Atualizar dados", use_container_width=True):

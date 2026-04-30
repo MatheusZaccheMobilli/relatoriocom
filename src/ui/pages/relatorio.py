@@ -143,7 +143,6 @@ def render() -> None:
         min_value=0,
         value=0,
         step=1,
-        help="Bronze < 100% · Prata ≥ 100% · Ouro ≥ 125%",
     )
 
     gerar = st.sidebar.button(
