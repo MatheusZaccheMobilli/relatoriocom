@@ -46,9 +46,9 @@ CSS_MOBILLI = """
         background-color: #1a1a1a;
         position: relative;
     }
-    /* Banner "EM CONSTRUÇÃO" no header preto */
+    /* Banner de status no header preto */
     header[data-testid="stHeader"]::before {
-        content: "🚧  DASHBOARD EM CONSTRUÇÃO  🚧";
+        content: "EM VALIDAÇÃO";
         position: absolute;
         left: 50%;
         top: 50%;
