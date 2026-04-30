@@ -28,7 +28,6 @@ aplicar_css(em_construcao=True)
 PAGINA_DASHBOARD = st.Page(
     dashboard.render,
     title="Dashboard",
-    icon="📊",
     url_path="dashboard",
     default=True,
 )
@@ -37,7 +36,7 @@ PAGINA_DASHBOARD = st.Page(
 def _perfil_placeholder() -> None:
     st.title("Perfil do Cliente")
     st.info(
-        "🚧 **Em construção.** Análise demográfica e contratual dos clientes — "
+        "**Em construção.** Análise demográfica e contratual dos clientes — "
         "idade, cidade, origem do lead, tipo de plano. "
         "Dados desde Mar/2026."
     )
@@ -46,7 +45,6 @@ def _perfil_placeholder() -> None:
 PAGINA_PERFIL = st.Page(
     _perfil_placeholder,
     title="Perfil do Cliente",
-    icon="👥",
     url_path="perfil",
 )
 
