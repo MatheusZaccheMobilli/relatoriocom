@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 
@@ -24,12 +25,25 @@ from src.ui.data import limpar_cache, serie_historica_cacheada
 from src.ui.shared import (
     PRIMEIRO_MES_CAPTACAO,
     classe_delta,
+    formatar_brl,
     formatar_data,
     formatar_pct,
     mes_ano_label,
     mes_curto,
     variacao_pct,
 )
+
+
+def _brl_compacto(v: Decimal | float | int) -> str:
+    """Formata R$ de forma compacta para card: R$ 312k, R$ 1,2M, R$ 850."""
+    f = float(v)
+    if f >= 1_000_000:
+        return f"R$ {f / 1_000_000:.1f}M".replace(".", ",")
+    if f >= 10_000:
+        return f"R$ {int(round(f / 1_000))}k"
+    if f >= 1_000:
+        return f"R$ {f / 1_000:.1f}k".replace(".", ",")
+    return f"R$ {int(round(f))}"
 
 
 def _md(html_str: str) -> None:
@@ -97,14 +111,15 @@ def _hero(mes: date, atualizado_em: datetime) -> None:
 
 
 def _highlights(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
-    """3 destaques forward-looking: mês atual · produtividade · projeção.
+    """3 destaques forward-looking: captações · faturamento R$ · projeção.
 
-    Substitui o comparativo MoM (que vive no histórico abaixo) por
-    indicadores acionáveis: onde estamos agora, ritmo, e onde vamos
-    parar — com nudge pra próximo nível Bronze/Prata/Ouro.
+    Card 2 mostra R$ que rodou no mês (MicroWork — boletos de aluguel
+    com movimento no mês) com delta MoM e projeção fim-de-mês.
     """
     total_atual = _total_emp(cmp_.atual)
     mes_at = cmp_.atual.mes
+    nome_at = mes_curto(mes_at)
+    nome_ant = mes_curto(cmp_.anterior.mes)
 
     # Card 1: Mês atual com dia parcial
     fim_at = (mes_at.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
@@ -113,10 +128,15 @@ def _highlights(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
         f"até dia {hoje.day:02d}/{mes_at.month:02d}" if em_curso else "mês fechado"
     )
 
-    # Card 2: Produtividade (captações por dia útil decorrido)
-    prod = total_atual / cmp_.du_decorridos_atual if cmp_.du_decorridos_atual else 0
-    sub_prod = (
-        f"{cmp_.du_decorridos_atual:.1f} de {cmp_.du_mes_atual:.0f} dias úteis"
+    # Card 2: Faturamento real (MicroWork)
+    fat_atual = cmp_.atual.faturamento
+    fat_anterior = cmp_.anterior.faturamento
+    pct_fat = variacao_pct(float(fat_atual), float(fat_anterior))
+    proj_fat = cmp_.projecao_faturamento
+    sub_fat = (
+        f"{html.escape(nome_ant)}: {_brl_compacto(fat_anterior)} · proj. {_brl_compacto(proj_fat)}"
+        if em_curso
+        else f"{html.escape(nome_ant)}: {_brl_compacto(fat_anterior)}"
     )
 
     # Card 3: Projeção + nudge "faltam X pra próximo nível"
@@ -139,17 +159,17 @@ def _highlights(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
     _md(f"""
         <div class="mob-hl-row">
             <div class="mob-hl">
-                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_at))} · captações</div>
+                <div class="mob-hl-lbl">{html.escape(nome_at)} · captações</div>
                 <div class="mob-hl-val">{total_atual}</div>
                 <div class="mob-hl-sub">{html.escape(sub_atual)}</div>
             </div>
             <div class="mob-hl parcial">
-                <div class="mob-hl-lbl">Produtividade</div>
-                <div class="mob-hl-val">{prod:.1f}<span style="font-size:18px;color:#6b7280;font-weight:400;"> /du</span></div>
-                <div class="mob-hl-sub">{html.escape(sub_prod)}</div>
+                <div class="mob-hl-lbl">{html.escape(nome_at)} · faturamento</div>
+                <div class="mob-hl-val">{_brl_compacto(fat_atual)} {_delta_badge(pct_fat)}</div>
+                <div class="mob-hl-sub">{sub_fat}</div>
             </div>
             <div class="mob-hl proj">
-                <div class="mob-hl-lbl">Projeção fim de {html.escape(mes_curto(mes_at))}</div>
+                <div class="mob-hl-lbl">Projeção fim de {html.escape(nome_at)}</div>
                 <div class="mob-hl-val">~{proj}</div>
                 <div class="mob-hl-sub">{html.escape(nudge)}</div>
             </div>
@@ -255,6 +275,67 @@ def _bar_comparativa(label: str, barras: list[tuple[str, int, str]], max_val: in
     )
 
 
+def _bloco_mix_e_saude(cmp_: CaptacoesComparadas, nome_ant: str, nome_at: str) -> None:
+    """Linha de 3 cards: mix Locação semanal/mensal + % devolução, todos com MoM.
+
+    Mix mostra a fração semanal vs mensal das locações captadas no mês.
+    Devolução mostra a taxa de captações que viraram devolução (P22).
+    """
+    atual = cmp_.atual
+    anterior = cmp_.anterior
+
+    # Mix Locação — só faz sentido se houve locação
+    sem_at, men_at = atual.locacoes_semanal, atual.locacoes_mensal
+    sem_ant, men_ant = anterior.locacoes_semanal, anterior.locacoes_mensal
+    loc_at = sem_at + men_at
+    loc_ant = sem_ant + men_ant
+
+    pct_sem_at = (sem_at / loc_at * 100) if loc_at else 0
+    pct_men_at = (men_at / loc_at * 100) if loc_at else 0
+    pct_sem_ant = (sem_ant / loc_ant * 100) if loc_ant else 0
+    delta_sem = pct_sem_at - pct_sem_ant  # variação em pontos percentuais
+
+    # % Devolução
+    dev_at = atual.devolvidos_total
+    dev_ant = anterior.devolvidos_total
+    pct_dev_at = (dev_at / atual.total_empresa * 100) if atual.total_empresa else 0
+    pct_dev_ant = (dev_ant / anterior.total_empresa * 100) if anterior.total_empresa else 0
+    delta_dev = variacao_pct(dev_at, dev_ant)
+
+    # Devolução: queda é POSITIVA (verde), por isso inverto o sinal pro classe_delta
+    classe_dev = classe_delta(-delta_dev) if dev_ant else "ne"
+    badge_dev_html = (
+        f'<span class="mob-delta {classe_dev}">{html.escape(formatar_pct(delta_dev))}</span>'
+    )
+
+    # Layout: 3 colunas pareadas (Mix Semanal, Mix Mensal, Devolução)
+    col_sem, col_men, col_dev = st.columns(3)
+    with col_sem:
+        _md(f"""
+            <div class="mob-kpi">
+                <div class="mob-kpi-label">Plano semanal · {html.escape(nome_at)}</div>
+                <div class="mob-kpi-value">{sem_at}<span style="font-size:18px;color:#6b7280;font-weight:400;"> ({pct_sem_at:.0f}%)</span></div>
+                <div class="mob-kpi-help">{sem_ant} em {html.escape(nome_ant)} ({pct_sem_ant:.0f}%) · Δ {delta_sem:+.0f}p.p.</div>
+            </div>
+        """)
+    with col_men:
+        _md(f"""
+            <div class="mob-kpi">
+                <div class="mob-kpi-label">Plano mensal · {html.escape(nome_at)}</div>
+                <div class="mob-kpi-value">{men_at}<span style="font-size:18px;color:#6b7280;font-weight:400;"> ({pct_men_at:.0f}%)</span></div>
+                <div class="mob-kpi-help">{men_ant} em {html.escape(nome_ant)} · base {loc_at} locações</div>
+            </div>
+        """)
+    with col_dev:
+        _md(f"""
+            <div class="mob-kpi">
+                <div class="mob-kpi-label">Devolução · {html.escape(nome_at)}</div>
+                <div class="mob-kpi-value">{pct_dev_at:.1f}%{badge_dev_html}</div>
+                <div class="mob-kpi-help">{dev_at} de {atual.total_empresa} · {html.escape(nome_ant)}: {pct_dev_ant:.1f}% ({dev_ant})</div>
+            </div>
+        """)
+
+
 def _tab_resumo(cmp_: CaptacoesComparadas) -> None:
     loc_ant = _locacoes_emp(cmp_.anterior)
     loc_atual = _locacoes_emp(cmp_.atual)
@@ -285,6 +366,9 @@ def _tab_resumo(cmp_: CaptacoesComparadas) -> None:
                 <div class="mob-kpi-help">{vnd_ant} em {html.escape(nome_ant)}</div>
             </div>
         """)
+
+    st.markdown("&nbsp;")
+    _bloco_mix_e_saude(cmp_, nome_ant, nome_at)
 
     st.markdown("&nbsp;")
     _md('<div class="mob-section-title">Comparativo geral (Locação · Venda)</div>')

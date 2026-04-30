@@ -140,6 +140,14 @@ class CaptacoesMes:
     # Mapa dia (1..31) -> captações do time naquele dia
     captacoes_por_dia: dict[int, int] = field(default_factory=dict)
     por_vendedor: list[CaptacoesVendedor] = field(default_factory=list)
+    # Faturamento real do mês (MicroWork): soma de boletos de aluguel
+    # com data de movimento dentro do mês calendário. Não é o `Deal.valor`.
+    faturamento: Decimal = Decimal("0")
+    # Mix de plano (locação): semanal vs mensal. Soma = locacoes_total.
+    locacoes_semanal: int = 0
+    locacoes_mensal: int = 0
+    # Total de captações devolvidas (pipeline 22) detectadas neste mês.
+    devolvidos_total: int = 0
 
 
 @dataclass(frozen=True)
@@ -151,7 +159,8 @@ class CaptacoesComparadas:
     projecao_total: int
     projecao_locacoes: int
     projecao_vendas: int
+    projecao_faturamento: Decimal = Decimal("0")
     # Dias úteis ponderados (regra Seg=1, Sáb=0.5, Dom=0, Feriado=0)
-    du_mes_atual: float
-    du_decorridos_atual: float
-    du_mes_anterior: float
+    du_mes_atual: float = 0.0
+    du_decorridos_atual: float = 0.0
+    du_mes_anterior: float = 0.0

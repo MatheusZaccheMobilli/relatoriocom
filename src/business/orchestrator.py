@@ -529,17 +529,29 @@ def _build_captacoes_mes_de_deals(
     todos_deals: list[Deal],
     devolucoes_por_placa: dict[str, list[dict]],
     vendedores: dict[int, str],
+    faturamento_mes: Decimal = Decimal("0"),
 ) -> CaptacoesMes:
     """Variante de `captacoes_no_mes` que recebe deals + devoluções já buscados.
 
     Permite reutilizar buscas paralelizadas (atual + anterior compartilham
     o pool de devoluções).
+
+    `faturamento_mes` é a soma de boletos de aluguel (MicroWork) com data de
+    movimento dentro do mês — calculada externamente e injetada aqui.
     """
     locacoes_total = sum(
         1 for d in todos_deals
         if d.pipeline_id in (bitrix.PIPELINE_LOCACAO, bitrix.PIPELINE_LOCACAO_SHOWROOM)
     )
     vendas_total = sum(1 for d in todos_deals if d.pipeline_id == bitrix.PIPELINE_VENDA)
+
+    # Mix semanal × mensal — só tem semântica em locação (venda é parcela única)
+    locacoes_semanal = sum(
+        1 for d in todos_deals
+        if d.pipeline_id in (bitrix.PIPELINE_LOCACAO, bitrix.PIPELINE_LOCACAO_SHOWROOM)
+        and d.plano_semanal
+    )
+    locacoes_mensal = locacoes_total - locacoes_semanal
 
     # Captações por dia — empresa toda (não só o time conhecido)
     captacoes_por_dia: dict[int, int] = {}
@@ -551,11 +563,9 @@ def _build_captacoes_mes_de_deals(
     # Auto-descobre TODOS os captadores que aparecem nos deals
     captadores_ids: set[int] = {d.assigned_by_id for d in todos_deals if d.assigned_by_id}
     por_vid: dict[int, list[CaptacaoItem]] = {vid: [] for vid in captadores_ids}
+    devolvidos_total = 0
 
     for d in todos_deals:
-        if not d.assigned_by_id:
-            continue
-
         deal_devolvido = False
         data_dev: date | None = None
         if d.placa and d.data_locacao and d.placa in devolucoes_por_placa:
@@ -568,6 +578,12 @@ def _build_captacoes_mes_de_deals(
                 mais_proxima = min(posteriores, key=lambda x: x["data_devolucao"])
                 deal_devolvido = True
                 data_dev = mais_proxima["data_devolucao"]
+
+        if deal_devolvido:
+            devolvidos_total += 1
+
+        if not d.assigned_by_id:
+            continue
 
         por_vid[d.assigned_by_id].append(CaptacaoItem(
             deal_id=d.id,
@@ -596,7 +612,41 @@ def _build_captacoes_mes_de_deals(
         vendas_total=vendas_total,
         captacoes_por_dia=captacoes_por_dia,
         por_vendedor=por_vendedor,
+        faturamento=faturamento_mes,
+        locacoes_semanal=locacoes_semanal,
+        locacoes_mensal=locacoes_mensal,
+        devolvidos_total=devolvidos_total,
     )
+
+
+def _faturamento_por_mes(
+    pagamentos: list[Pagamento],
+    meses: list[date],
+) -> dict[date, Decimal]:
+    """Agrupa boletos de aluguel (filtro `_eh_boleto_aluguel`) por mês de movimento.
+
+    Retorna `{primeiro_dia_do_mes: soma_valor_total}`. Meses sem pagamento
+    aparecem com Decimal("0") pra evitar KeyError no consumidor.
+
+    Importante: usa o mesmo filtro do orchestrator de comissão pra garantir
+    consistência — descarta NF-E (taxas), franquia, multa, reembolso, etc.
+    """
+    out: dict[date, Decimal] = {_primeiro_dia_mes(m): Decimal("0") for m in meses}
+    for p in pagamentos:
+        if not _eh_boleto_aluguel(p):
+            continue
+        chave = _primeiro_dia_mes(p.movimento)
+        if chave in out:
+            out[chave] += p.valor_total
+    return out
+
+
+def _projetar_dec(parcial: Decimal, du_decorridos: float, du_total: float) -> Decimal:
+    """Projeta valor monetário a partir do parcial e dos dias úteis decorridos."""
+    if du_decorridos <= 0:
+        return parcial
+    fator = Decimal(str(du_total / du_decorridos))
+    return (parcial * fator).quantize(Decimal("0.01"))
 
 
 def captacoes_comparadas(
@@ -606,8 +656,9 @@ def captacoes_comparadas(
 ) -> CaptacoesComparadas:
     """Compara captações do mês atual com o mês anterior + projeção.
 
-    Performance: 6 chamadas Bitrix de deals em paralelo + 1 chamada
-    consolidada de devoluções (já paralelizada internamente por placa).
+    Performance: 6 chamadas Bitrix de deals em paralelo + 1 fetch
+    consolidado de pagamentos MicroWork + 1 chamada consolidada
+    de devoluções (já paralelizada internamente por placa).
     """
     if hoje is None:
         hoje = date.today()
@@ -617,7 +668,13 @@ def captacoes_comparadas(
     # 1. Busca deals dos 2 meses em paralelo (6 chamadas Bitrix simultâneas)
     deals_por_mes = _fetch_deals_paralelo([mes_atual, mes_anterior])
 
-    # 2. Devoluções: consolida placas dos 2 meses numa única chamada
+    # 2. Pagamentos MicroWork — 1 fetch único cobrindo a janela inteira
+    inicio_pgto = _primeiro_dia_mes(mes_anterior)
+    fim_pgto = _ultimo_dia_mes(mes_atual)
+    pagamentos = microwork.buscar_recebimentos(inicio_pgto, fim_pgto)
+    fat_por_mes = _faturamento_por_mes(pagamentos, [mes_anterior, mes_atual])
+
+    # 3. Devoluções: consolida placas dos 2 meses numa única chamada
     todas_placas = [
         d.placa
         for ds in deals_por_mes.values()
@@ -630,9 +687,11 @@ def captacoes_comparadas(
 
     atual = _build_captacoes_mes_de_deals(
         mes_atual, deals_por_mes[mes_atual], devolucoes_por_placa, vendedores,
+        faturamento_mes=fat_por_mes[_primeiro_dia_mes(mes_atual)],
     )
     anterior = _build_captacoes_mes_de_deals(
         mes_anterior, deals_por_mes[mes_anterior], devolucoes_por_placa, vendedores,
+        faturamento_mes=fat_por_mes[_primeiro_dia_mes(mes_anterior)],
     )
 
     du_total = du_mes(mes_atual)
@@ -652,6 +711,7 @@ def captacoes_comparadas(
         projecao_total=_projetar(atual.total_empresa, du_decorridos, du_total),
         projecao_locacoes=_projetar(atual.locacoes_total, du_decorridos, du_total),
         projecao_vendas=_projetar(atual.vendas_total, du_decorridos, du_total),
+        projecao_faturamento=_projetar_dec(atual.faturamento, du_decorridos, du_total),
         du_mes_atual=du_total,
         du_decorridos_atual=du_decorridos,
         du_mes_anterior=du_total_ant,
@@ -714,6 +774,7 @@ def cmp_de_serie(
         projecao_total=_projetar(atual.total_empresa, du_decorridos, du_total),
         projecao_locacoes=_projetar(atual.locacoes_total, du_decorridos, du_total),
         projecao_vendas=_projetar(atual.vendas_total, du_decorridos, du_total),
+        projecao_faturamento=_projetar_dec(atual.faturamento, du_decorridos, du_total),
         du_mes_atual=du_total,
         du_decorridos_atual=du_decorridos,
         du_mes_anterior=du_total_ant,
@@ -728,17 +789,29 @@ def serie_historica(
     """Série de CaptacoesMes mês-a-mês do `mes_floor` até `mes_topo` (inclusivo).
 
     Tudo em paralelo (3 chamadas Bitrix por mês × N meses, gated em 4
-    conexões simultâneas pelo semáforo do bitrix client) + 1 chamada
-    consolidada de devoluções pra todas as placas da janela.
+    conexões simultâneas pelo semáforo do bitrix client) + 1 fetch
+    MicroWork consolidado pra toda a janela (faturamento por mês) +
+    1 chamada consolidada de devoluções pra todas as placas da janela.
 
-    Para 6 meses: 18 chamadas de deals serializadas em ondas de 4, totalizando
-    ~5 ondas. Aceitável e bem mais rápido que sequencial.
+    Para 6 meses: 18 chamadas Bitrix em ondas de 4 + 1 MicroWork (em
+    paralelo com o primeiro batch de Bitrix) + 1 devoluções.
     """
     meses = _meses_ate(mes_floor, mes_topo)
     if not meses:
         return []
 
-    deals_por_mes = _fetch_deals_paralelo(meses)
+    # Roda Bitrix (deals) e MicroWork (pagamentos) em paralelo: o MicroWork
+    # é uma única chamada de ~5-15s que cabe dentro da janela do Bitrix.
+    inicio_pgto = _primeiro_dia_mes(meses[0])
+    fim_pgto = _ultimo_dia_mes(meses[-1])
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_deals = ex.submit(_fetch_deals_paralelo, meses)
+        fut_pagamentos = ex.submit(microwork.buscar_recebimentos, inicio_pgto, fim_pgto)
+        deals_por_mes = fut_deals.result()
+        pagamentos = fut_pagamentos.result()
+
+    fat_por_mes = _faturamento_por_mes(pagamentos, meses)
 
     todas_placas = [
         d.placa
@@ -753,6 +826,7 @@ def serie_historica(
     return [
         _build_captacoes_mes_de_deals(
             mes, deals_por_mes[mes], devolucoes_por_placa, vendedores,
+            faturamento_mes=fat_por_mes[_primeiro_dia_mes(mes)],
         )
         for mes in meses
     ]
