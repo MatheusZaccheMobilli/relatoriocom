@@ -525,7 +525,8 @@ CSS_MOBILLI = """
         border-top: none;
     }
     .mob-tab tr.total:hover td { background: #1a1a1a; }
-    .mob-tab td.num {
+    .mob-tab td.num,
+    .mob-tab th.num {
         text-align: right;
         font-variant-numeric: tabular-nums;
     }
