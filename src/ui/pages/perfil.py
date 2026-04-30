@@ -52,6 +52,17 @@ def _filtrar_por_tipo(itens: list[CaptacaoItem], tipo: str) -> list[CaptacaoItem
     return [i for i in itens if i.tipo_operacao.startswith("Venda")]
 
 
+def _normalize_cidade(s: str) -> str:
+    """Normaliza nome de cidade pra deduplicar variações (ex: 'VILA VELHA' / 'Vila Velha').
+
+    - Strip + colapsa espaços internos
+    - Title case
+    """
+    if not s:
+        return ""
+    return " ".join(s.split()).title()
+
+
 # ─── HEADER ─────────────────────────────────────────────────────────────
 def _hero(atualizado_em: datetime, total: int) -> None:
     _md(f"""
@@ -72,7 +83,7 @@ def _kpis_topo(itens: list[CaptacaoItem]) -> None:
     """3 KPIs: total · cidade líder · origem líder."""
     total = len(itens)
 
-    cidades = Counter(i.cidade for i in itens if i.cidade)
+    cidades = Counter(_normalize_cidade(i.cidade) for i in itens if i.cidade)
     cidade_top, cidade_n = cidades.most_common(1)[0] if cidades else ("—", 0)
     pct_cidade = (cidade_n / total * 100) if total else 0
 
@@ -214,7 +225,7 @@ def _tab_geografia(itens: list[CaptacaoItem]) -> None:
     rows = []
     for i in com_cidade:
         rows.append({
-            "Cidade": i.cidade,
+            "Cidade": _normalize_cidade(i.cidade),
             "Tipo": "Locação" if i.tipo_operacao == "Locação" else "Venda",
             "Captações": 1,
         })
@@ -289,7 +300,8 @@ def _tab_plano(itens: list[CaptacaoItem]) -> None:
                 {"Tipo": "Venda", "Captações": n_vnd},
             ])
             arc_op = alt.Chart(df_op).mark_arc(
-                innerRadius=70, stroke="#ffffff", strokeWidth=3
+                innerRadius=70, outerRadius=120,
+                stroke="#ffffff", strokeWidth=3,
             ).encode(
                 theta=alt.Theta("Captações:Q", stack=True),
                 color=alt.Color(
@@ -300,7 +312,7 @@ def _tab_plano(itens: list[CaptacaoItem]) -> None:
                 tooltip=["Tipo", "Captações"],
             )
             text_op = alt.Chart(df_op).mark_text(
-                radius=105, color="#ffffff", fontSize=15, fontWeight=700,
+                radius=95, color="#ffffff", fontSize=15, fontWeight=700,
             ).encode(
                 theta=alt.Theta("Captações:Q", stack=True),
                 text=alt.Text("Captações:Q", format=","),
@@ -330,7 +342,8 @@ def _tab_plano(itens: list[CaptacaoItem]) -> None:
                 {"Plano": "Mensal", "Captações": n_men},
             ])
             arc_plano = alt.Chart(df_plano).mark_arc(
-                innerRadius=70, stroke="#ffffff", strokeWidth=3
+                innerRadius=70, outerRadius=120,
+                stroke="#ffffff", strokeWidth=3,
             ).encode(
                 theta=alt.Theta("Captações:Q", stack=True),
                 color=alt.Color(
@@ -341,7 +354,7 @@ def _tab_plano(itens: list[CaptacaoItem]) -> None:
                 tooltip=["Plano", "Captações"],
             )
             text_plano = alt.Chart(df_plano).mark_text(
-                radius=105, color="#ffffff", fontSize=15, fontWeight=700,
+                radius=95, color="#ffffff", fontSize=15, fontWeight=700,
             ).encode(
                 theta=alt.Theta("Captações:Q", stack=True),
                 text=alt.Text("Captações:Q", format=","),

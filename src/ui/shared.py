@@ -543,10 +543,28 @@ CSS_MOBILLI = """
     }
 
     /* ---------- TABELA DE ITENS DO RELATÓRIO ---------- */
+    .mob-tab-itens-wrap {
+        max-height: 520px;
+        overflow: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+    }
     .mob-tab-itens { font-size: 12px; }
     .mob-tab-itens th, .mob-tab-itens td {
         padding: 8px 10px;
         white-space: nowrap;
+    }
+    .mob-tab-itens thead th {
+        position: sticky;
+        top: 0;
+        background: #f8f9fa;
+        z-index: 2;
+        box-shadow: inset 0 -1px 0 #e5e7eb;
+    }
+    .mob-tab-itens tfoot tr.total td {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
     }
     .mob-tab-itens td:nth-child(4) {  /* Cliente — pode quebrar */
         white-space: normal;
@@ -565,6 +583,9 @@ CSS_MOBILLI = """
         padding: 12px 14px;
     }
     .mob-tab-itens tfoot tr.total td.num { font-size: 16px; }
+
+    /* ---------- ESCONDE TOOLBAR DO STREAMLIT (fullscreen / view as table) ---------- */
+    [data-testid="stElementToolbar"] { display: none !important; }
 
     /* ---------- TERMO DE CIÊNCIA + ASSINATURA ---------- */
     .mob-termo {

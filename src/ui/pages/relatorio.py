@@ -87,7 +87,7 @@ def _tabela_itens(itens: list, total_comissao) -> None:
 
     st.markdown(
         f"""
-        <div style="overflow-x:auto;">
+        <div class="mob-tab-itens-wrap">
         <table class="mob-tab mob-tab-itens">
             <thead>
                 <tr>

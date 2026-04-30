@@ -16,9 +16,10 @@ TABELA_COMISSAO = {
 def calcular_nivel(qtd_atingida: int, qtd_meta: int) -> NivelMeta:
     """Calcula o nível de meta atingido por quantidade de motos.
 
-    Bronze: >= 75% da meta
+    Proporção entre níveis = ±32% sobre a meta.
+    Bronze: < 100% da meta (padrão)
     Prata:  >= 100% da meta
-    Ouro:   >= 125% da meta
+    Ouro:   >= 132% da meta
     """
     if qtd_meta <= 0:
         return NivelMeta(
@@ -32,7 +33,7 @@ def calcular_nivel(qtd_atingida: int, qtd_meta: int) -> NivelMeta:
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
 
-    if percentual >= Decimal("125"):
+    if percentual >= Decimal("132"):
         nome = "Ouro"
     elif percentual >= Decimal("100"):
         nome = "Prata"

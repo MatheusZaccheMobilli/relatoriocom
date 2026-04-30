@@ -317,12 +317,15 @@ def montar_relatorio(
                 # - Descarta juros/multa (pagou R$833 com card R$276 → 3 parcelas, não 4)
                 # - Protege pagamento parcial (pagou R$176 de R$276 → 1 parcela)
                 # - Reconhece boleto multi-período (1 boleto de R$552 = 2 semanas)
+                # - Teto de 4 semanas/mês: cliente que pagou 5+ semanalidades no mês
+                #   não infla a comissão — base máxima é 4× o card.
                 if deal.valor > 0:
                     qtd_parcelas = int(
                         (soma_boletos / deal.valor).quantize(
                             Decimal("1"), rounding=ROUND_HALF_UP
                         )
                     )
+                    qtd_parcelas = min(qtd_parcelas, 4)
                 else:
                     qtd_parcelas = 0
             else:
