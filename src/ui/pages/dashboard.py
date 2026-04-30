@@ -96,28 +96,62 @@ def _hero(mes: date, atualizado_em: datetime) -> None:
     """)
 
 
-def _highlights(cmp_: CaptacoesComparadas) -> None:
-    """3 destaques no topo: anterior · atual · projeção. Empresa-wide."""
-    total_ant = _total_emp(cmp_.anterior)
-    total_atual = _total_emp(cmp_.atual)
-    pct_proj = variacao_pct(cmp_.projecao_total, total_ant)
+def _highlights(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
+    """3 destaques forward-looking: mês atual · produtividade · projeção.
 
-    mes_ant = cmp_.anterior.mes
+    Substitui o comparativo MoM (que vive no histórico abaixo) por
+    indicadores acionáveis: onde estamos agora, ritmo, e onde vamos
+    parar — com nudge pra próximo nível Bronze/Prata/Ouro.
+    """
+    total_atual = _total_emp(cmp_.atual)
     mes_at = cmp_.atual.mes
+
+    # Card 1: Mês atual com dia parcial
+    fim_at = (mes_at.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    em_curso = hoje <= fim_at and hoje.year == mes_at.year and hoje.month == mes_at.month
+    sub_atual = (
+        f"até dia {hoje.day:02d}/{mes_at.month:02d}" if em_curso else "mês fechado"
+    )
+
+    # Card 2: Produtividade (captações por dia útil decorrido)
+    prod = total_atual / cmp_.du_decorridos_atual if cmp_.du_decorridos_atual else 0
+    sub_prod = (
+        f"{cmp_.du_decorridos_atual:.1f} de {cmp_.du_mes_atual:.0f} dias úteis"
+    )
+
+    # Card 3: Projeção + nudge "faltam X pra próximo nível"
+    proj = cmp_.projecao_total
+    if meta > 0:
+        prata_alvo = meta
+        ouro_alvo = int(meta * 1.25)
+        if proj >= ouro_alvo:
+            nudge = f"projeção bate Ouro com folga"
+        elif proj >= prata_alvo:
+            falta_ouro = ouro_alvo - proj
+            nudge = f"+{falta_ouro} pra projetar Ouro"
+        else:
+            falta_prata = prata_alvo - proj
+            falta_ouro = ouro_alvo - proj
+            nudge = f"+{falta_prata} pra Prata · +{falta_ouro} pra Ouro"
+    else:
+        nudge = "informe a meta no sidebar"
 
     _md(f"""
         <div class="mob-hl-row">
             <div class="mob-hl">
-                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_ant))}</div>
-                <div class="mob-hl-val">{total_ant}</div>
+                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_at))} · captações</div>
+                <div class="mob-hl-val">{total_atual}</div>
+                <div class="mob-hl-sub">{html.escape(sub_atual)}</div>
             </div>
             <div class="mob-hl parcial">
-                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_at))}</div>
-                <div class="mob-hl-val">{total_atual}</div>
+                <div class="mob-hl-lbl">Produtividade</div>
+                <div class="mob-hl-val">{prod:.1f}<span style="font-size:18px;color:#6b7280;font-weight:400;"> /du</span></div>
+                <div class="mob-hl-sub">{html.escape(sub_prod)}</div>
             </div>
             <div class="mob-hl proj">
                 <div class="mob-hl-lbl">Projeção fim de {html.escape(mes_curto(mes_at))}</div>
-                <div class="mob-hl-val">~{cmp_.projecao_total} {_delta_badge(pct_proj)}</div>
+                <div class="mob-hl-val">~{proj}</div>
+                <div class="mob-hl-sub">{html.escape(nudge)}</div>
             </div>
         </div>
     """)
@@ -799,7 +833,7 @@ def render() -> None:
         st.stop()
 
     _hero(mes, datetime.now())
-    _highlights(cmp_)
+    _highlights(cmp_, meta, hoje)
     _meta_progresso(cmp_, meta, hoje)
 
     tab_resumo, tab_evol, tab_vend, tab_prod = st.tabs(
