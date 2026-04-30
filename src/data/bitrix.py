@@ -19,8 +19,9 @@ PIPELINE_LOCACAO_SHOWROOM = 0   # Locação Showroom (presencial)
 PIPELINE_VENDA = 40
 
 # Limite global de conexões simultâneas ao Bitrix.
-# Mais que isso = 503 Service Temporarily Unavailable.
-_BITRIX_GATE = Semaphore(4)
+# 6 = sweet spot pra dashboard (3 pipelines × 2 meses cabem em 1 wave).
+# Mais que ~10 começa a estourar 503.
+_BITRIX_GATE = Semaphore(6)
 
 # Status HTTP que justificam retry (rate limit + indisponibilidade transiente)
 _RETRY_STATUS = {429, 500, 502, 503, 504}

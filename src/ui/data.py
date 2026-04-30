@@ -19,8 +19,9 @@ from src.business.orchestrator import (
 from src.models import CaptacoesComparadas, CaptacoesMes, RelatorioData
 
 
-# TTL de 5min: equilibra atualização frequente com peso na API.
-_TTL_SEGUNDOS = 300
+# TTL de 30min: dashboard não precisa de dado super-fresco e mantém cache
+# por mais tempo entre sessões (free tier do Streamlit Cloud não tem keep-alive).
+_TTL_SEGUNDOS = 1800
 
 
 @st.cache_data(ttl=_TTL_SEGUNDOS, show_spinner=False)

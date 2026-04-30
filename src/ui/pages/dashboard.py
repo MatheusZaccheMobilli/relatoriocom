@@ -28,7 +28,6 @@ from src.ui.shared import (
     formatar_pct,
     mes_ano_label,
     mes_curto,
-    opcoes_de_mes,
     variacao_pct,
 )
 
@@ -749,17 +748,9 @@ def _tab_produtividade(cmp_: CaptacoesComparadas) -> None:
 def render() -> None:
     st.sidebar.markdown("## Dashboard")
 
-    opcoes = opcoes_de_mes(ate_mes_seguinte=False, desde=PRIMEIRO_MES_CAPTACAO)
-    if not opcoes:
-        st.error("Nenhum mês disponível.")
-        return
-
-    mes = st.sidebar.selectbox(
-        "Mês de captação",
-        opcoes,
-        index=0,
-        format_func=mes_ano_label,
-    )
+    # Dashboard sempre olha pro mês corrente (+ histórico desde Mar/2026).
+    # Sem seletor de mês — simplifica a UI e maximiza cache hits.
+    mes = date.today().replace(day=1)
 
     meta = st.sidebar.number_input(
         "Meta do time (qtd captações)",
