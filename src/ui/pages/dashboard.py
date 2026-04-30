@@ -11,17 +11,16 @@ from __future__ import annotations
 import html
 from datetime import date, datetime, timedelta
 
+from dateutil.relativedelta import relativedelta
+
 import altair as alt
 import pandas as pd
 import streamlit as st
 
 from src.auth import papel_por_id, tem_visao_completa, todos_nomes_conhecidos
+from src.business.orchestrator import cmp_de_serie
 from src.models import CaptacoesComparadas, CaptacoesMes, CaptacoesVendedor
-from src.ui.data import (
-    captacoes_comparadas_cacheadas,
-    limpar_cache,
-    serie_historica_cacheada,
-)
+from src.ui.data import limpar_cache, serie_historica_cacheada
 from src.ui.shared import (
     PRIMEIRO_MES_CAPTACAO,
     classe_delta,
@@ -782,17 +781,20 @@ def render() -> None:
     vendedores_key = tuple(sorted(todos_conhecidos.items()))
     hoje = date.today()
     try:
+        # Único fetch ao Bitrix: a série histórica. O comparativo MoM é
+        # derivado dessa série sem refetch (era 12 chamadas Bitrix → agora 6).
+        # Inclui mês_anterior pra cobrir corner case quando atual = mes_floor.
+        floor_efetivo = min(
+            PRIMEIRO_MES_CAPTACAO,
+            (mes.replace(day=1) - relativedelta(months=1)).replace(day=1),
+        )
         with st.spinner("Carregando dados de vendas..."):
-            cmp_ = captacoes_comparadas_cacheadas(
-                mes_atual=mes,
-                vendedores_key=vendedores_key,
-                hoje=hoje,
-            )
             serie = serie_historica_cacheada(
-                mes_floor=PRIMEIRO_MES_CAPTACAO,
+                mes_floor=floor_efetivo,
                 mes_topo=mes,
                 vendedores_key=vendedores_key,
             )
+            cmp_ = cmp_de_serie(serie, mes_atual=mes, hoje=hoje)
     except Exception as exc:  # noqa: BLE001
         # Bitrix instável (503/timeout) ou rede caiu — UX amigável + ação clara.
         st.error(

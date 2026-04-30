@@ -670,6 +670,56 @@ def _meses_ate(mes_floor: date, mes_topo: date) -> list[date]:
     return out
 
 
+def cmp_de_serie(
+    serie: list[CaptacoesMes],
+    mes_atual: date,
+    hoje: date | None = None,
+) -> CaptacoesComparadas:
+    """Constrói CaptacoesComparadas reusando uma série já materializada.
+
+    Evita refetch quando o dashboard já chamou `serie_historica` — o mês
+    atual e o anterior estão na série, e a projeção é só aritmética em
+    cima dos dias úteis.
+    """
+    if hoje is None:
+        hoje = date.today()
+
+    mes_atual = _primeiro_dia_mes(mes_atual)
+    mes_anterior = (mes_atual - relativedelta(months=1)).replace(day=1)
+
+    snap_por_mes = {s.mes: s for s in serie}
+    atual = snap_por_mes.get(mes_atual)
+    anterior = snap_por_mes.get(mes_anterior)
+
+    if atual is None or anterior is None:
+        # Mês fora da janela da série — sinaliza com snapshot vazio
+        # pra UI cair nos empty states em vez de quebrar.
+        from src.models import CaptacoesMes as _CM
+        if atual is None:
+            atual = _CM(mes=mes_atual, total_empresa=0, locacoes_total=0,
+                        vendas_total=0, captacoes_por_dia={}, por_vendedor=[])
+        if anterior is None:
+            anterior = _CM(mes=mes_anterior, total_empresa=0, locacoes_total=0,
+                           vendas_total=0, captacoes_por_dia={}, por_vendedor=[])
+
+    du_total = du_mes(mes_atual)
+    du_total_ant = du_mes(mes_anterior)
+
+    fim_mes = _ultimo_dia_mes(mes_atual)
+    du_decorridos = du_total if hoje >= fim_mes else du_ate_hoje(mes_atual, hoje)
+
+    return CaptacoesComparadas(
+        atual=atual,
+        anterior=anterior,
+        projecao_total=_projetar(atual.total_empresa, du_decorridos, du_total),
+        projecao_locacoes=_projetar(atual.locacoes_total, du_decorridos, du_total),
+        projecao_vendas=_projetar(atual.vendas_total, du_decorridos, du_total),
+        du_mes_atual=du_total,
+        du_decorridos_atual=du_decorridos,
+        du_mes_anterior=du_total_ant,
+    )
+
+
 def serie_historica(
     mes_floor: date,
     mes_topo: date,
