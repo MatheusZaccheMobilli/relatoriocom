@@ -20,6 +20,7 @@ import streamlit as st
 
 from src.auth import papel_por_id, tem_visao_completa, todos_nomes_conhecidos
 from src.business.orchestrator import cmp_de_serie
+from src.data.bitrix import label_source
 from src.models import CaptacoesComparadas, CaptacoesMes, CaptacoesVendedor
 from src.ui.data import limpar_cache, serie_historica_cacheada
 from src.ui.shared import (
@@ -863,6 +864,126 @@ def _tab_produtividade(cmp_: CaptacoesComparadas) -> None:
     )
 
 
+# ─── ABA: CONSOLIDADO ──────────────────────────────────────────────────
+def _normalize_cidade(s: str) -> str:
+    if not s:
+        return ""
+    return " ".join(s.split()).title()
+
+
+def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
+    """Tabela consolidada: todos os negócios fechados desde Mar/2026.
+
+    Filtros: vendedor, tipo, plano, status. Busca livre por cliente ou placa.
+    Export CSV. Tabela com sort e scroll nativos do st.dataframe.
+    """
+    rows = []
+    for snap in serie:
+        for v in snap.por_vendedor:
+            for item in v.itens:
+                if item.tipo_operacao == "Locação":
+                    plano = "Semanal" if item.plano_semanal else "Mensal"
+                else:
+                    plano = "—"
+                rows.append({
+                    "Data": item.data_locacao,
+                    "Vendedor": v.nome,
+                    "Cliente": item.nome_cliente,
+                    "Placa": item.placa or "—",
+                    "Tipo": item.tipo_operacao,
+                    "Plano": plano,
+                    "Origem": label_source(item.source_id),
+                    "Cidade": _normalize_cidade(item.cidade) or "—",
+                    "Status": "Devolvido" if item.devolvido else "Ativo",
+                    "Devolução": item.data_devolucao,
+                })
+
+    if not rows:
+        st.info("Nenhum negócio fechado no período.")
+        return
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values("Data", ascending=False, na_position="last").reset_index(drop=True)
+
+    with st.expander("Filtros e busca", expanded=True):
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            f_vend = st.multiselect(
+                "Vendedor",
+                sorted(df["Vendedor"].unique()),
+                default=[],
+            )
+        with col2:
+            f_tipo = st.multiselect(
+                "Tipo",
+                sorted(df["Tipo"].unique()),
+                default=[],
+            )
+        with col3:
+            f_plano = st.multiselect(
+                "Plano",
+                sorted(df["Plano"].unique()),
+                default=[],
+            )
+        with col4:
+            f_status = st.multiselect(
+                "Status",
+                ["Ativo", "Devolvido"],
+                default=[],
+            )
+        f_busca = st.text_input(
+            "Buscar por cliente ou placa",
+            placeholder="ex: João Silva, ABC1D23",
+        )
+
+    df_f = df.copy()
+    if f_vend:
+        df_f = df_f[df_f["Vendedor"].isin(f_vend)]
+    if f_tipo:
+        df_f = df_f[df_f["Tipo"].isin(f_tipo)]
+    if f_plano:
+        df_f = df_f[df_f["Plano"].isin(f_plano)]
+    if f_status:
+        df_f = df_f[df_f["Status"].isin(f_status)]
+    if f_busca:
+        s = f_busca.strip().lower()
+        df_f = df_f[
+            df_f["Cliente"].str.lower().str.contains(s, na=False)
+            | df_f["Placa"].str.lower().str.contains(s, na=False)
+        ]
+
+    n_total = len(df)
+    n_filtrado = len(df_f)
+    if n_filtrado != n_total:
+        st.caption(f"Exibindo **{n_filtrado}** de **{n_total}** negócios")
+    else:
+        st.caption(f"**{n_total}** negócios")
+
+    st.dataframe(
+        df_f,
+        use_container_width=True,
+        hide_index=True,
+        height=520,
+        column_config={
+            "Data": st.column_config.DateColumn(
+                "Data locação", format="DD/MM/YYYY"
+            ),
+            "Devolução": st.column_config.DateColumn(
+                "Data devolução", format="DD/MM/YYYY"
+            ),
+        },
+    )
+
+    csv = df_f.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Baixar CSV",
+        csv,
+        file_name=f"consolidado_{date.today().strftime('%Y-%m-%d')}.csv",
+        mime="text/csv",
+        type="secondary",
+    )
+
+
 # ─── render principal ──────────────────────────────────────────────────
 def render() -> None:
     st.sidebar.markdown("## Dashboard")
@@ -921,8 +1042,8 @@ def render() -> None:
     _highlights(cmp_, meta, hoje)
     _meta_progresso(cmp_, meta, hoje)
 
-    tab_resumo, tab_evol, tab_vend, tab_prod = st.tabs(
-        ["Resumo", "Evolução", "Vendedores", "Produtividade"]
+    tab_resumo, tab_evol, tab_vend, tab_prod, tab_cons = st.tabs(
+        ["Resumo", "Evolução", "Vendedores", "Produtividade", "Consolidado"]
     )
 
     with tab_resumo:
@@ -933,3 +1054,5 @@ def render() -> None:
         _tab_vendedores(cmp_)
     with tab_prod:
         _tab_produtividade(cmp_)
+    with tab_cons:
+        _tab_consolidado(serie)
