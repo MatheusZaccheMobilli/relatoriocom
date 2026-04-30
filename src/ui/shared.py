@@ -618,8 +618,14 @@ CSS_MOBILLI = """
 """
 
 
-def aplicar_css() -> None:
-    st.markdown(CSS_MOBILLI, unsafe_allow_html=True)
+def aplicar_css(em_construcao: bool = True) -> None:
+    """Aplica o CSS Mobílli. Se `em_construcao=False`, oculta o banner amarelo do header."""
+    css = CSS_MOBILLI
+    if not em_construcao:
+        css = css + (
+            '<style>header[data-testid="stHeader"]::before { content: none !important; }</style>'
+        )
+    st.markdown(css, unsafe_allow_html=True)
 
 
 def formatar_brl(valor: Decimal) -> str:
