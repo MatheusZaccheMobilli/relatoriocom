@@ -619,12 +619,37 @@ CSS_MOBILLI = """
 
 
 def aplicar_css(em_construcao: bool = True) -> None:
-    """Aplica o CSS Mobílli. Se `em_construcao=False`, oculta o banner amarelo do header."""
+    """Aplica o CSS Mobílli.
+
+    Se `em_construcao=False`, oculta o banner amarelo E colapsa o header
+    inteiro (que ficava reservando ~90px vazios no topo).
+    """
     css = CSS_MOBILLI
     if not em_construcao:
         css = css + (
-            '<style>header[data-testid="stHeader"]::before { content: none !important; }</style>'
+            "<style>"
+            'header[data-testid="stHeader"]::before { content: none !important; }'
+            'header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; }'
+            'div[data-testid="stToolbar"] { display: none !important; }'
+            "</style>"
         )
+    # Tooltip "?" do Streamlit no sidebar — força contraste legível (default era
+    # quase branco em fundo preto, parecendo um quadradinho mudo)
+    css = css + (
+        "<style>"
+        'section[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"],'
+        'section[data-testid="stSidebar"] [data-testid="stTooltipIcon"],'
+        'section[data-testid="stSidebar"] svg[title="help"] {'
+        '  color: #9ca3af !important;'
+        '  fill: #9ca3af !important;'
+        '}'
+        'section[data-testid="stSidebar"] [data-testid="stTooltipHoverTarget"]:hover,'
+        'section[data-testid="stSidebar"] [data-testid="stTooltipIcon"]:hover {'
+        '  color: #FF6600 !important;'
+        '  fill: #FF6600 !important;'
+        '}'
+        "</style>"
+    )
     st.markdown(css, unsafe_allow_html=True)
 
 
