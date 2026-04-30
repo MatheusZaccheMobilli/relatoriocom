@@ -1,9 +1,12 @@
 """Cliente da API Bitrix24 — puxa deals e vendedores."""
 
 import os
+import random
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
+from threading import Semaphore
 from typing import Optional
 
 import requests
@@ -15,6 +18,13 @@ PIPELINE_LOCACAO = 48           # Locação APP (fluxo principal)
 PIPELINE_LOCACAO_SHOWROOM = 0   # Locação Showroom (presencial)
 PIPELINE_VENDA = 40
 
+# Limite global de conexões simultâneas ao Bitrix.
+# Mais que isso = 503 Service Temporarily Unavailable.
+_BITRIX_GATE = Semaphore(4)
+
+# Status HTTP que justificam retry (rate limit + indisponibilidade transiente)
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+
 
 def _webhook_url() -> str:
     url = os.getenv("BITRIX_WEBHOOK_URL")
@@ -24,10 +34,35 @@ def _webhook_url() -> str:
 
 
 def _call(method: str, params: dict | None = None) -> dict:
+    """Chamada Bitrix com semáforo + retry exponencial.
+
+    O semáforo limita concorrência global a 4. Retry tenta até 4 vezes em
+    erros transientes (429/500/502/503/504, timeout, ConnectionError) com
+    backoff exponencial (0.5s, 1s, 2s, 4s) + jitter.
+    """
     url = f"{_webhook_url()}/{method}.json"
-    resp = requests.get(url, params=params or {}, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    last_exc: Exception | None = None
+    delay = 0.5
+
+    with _BITRIX_GATE:
+        for tentativa in range(4):
+            try:
+                resp = requests.get(url, params=params or {}, timeout=30)
+                if resp.status_code in _RETRY_STATUS:
+                    last_exc = requests.HTTPError(
+                        f"{resp.status_code} {resp.reason} (Bitrix {method})"
+                    )
+                else:
+                    resp.raise_for_status()
+                    return resp.json()
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_exc = exc
+
+            if tentativa < 3:
+                time.sleep(delay + random.uniform(0, 0.25))
+                delay *= 2
+
+    raise last_exc or RuntimeError(f"Bitrix {method} falhou sem causa identificada")
 
 
 def _call_list(method: str, params: dict | None = None) -> list[dict]:
@@ -198,8 +233,9 @@ def buscar_devolucoes_por_placas(placas: list[str]) -> dict[str, list[dict]]:
         return {}
 
     resultado: dict[str, list[dict]] = {}
-    # 12 workers — Bitrix aguenta bem; rede é o limite, não CPU.
-    with ThreadPoolExecutor(max_workers=12) as ex:
+    # 6 workers — o semáforo global de 4 conexões serializa o excedente,
+    # mas mantemos um pequeno pool pra esconder latência de DNS/TCP.
+    with ThreadPoolExecutor(max_workers=6) as ex:
         for placa, devs in ex.map(_devolucoes_de_placa, placas_unicas):
             if devs:
                 resultado[placa] = devs

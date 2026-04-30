@@ -42,7 +42,25 @@ CSS_MOBILLI = """
 
     /* ---------- Reset visual do Streamlit ---------- */
     .stDeployButton, #MainMenu { display: none !important; }
-    header[data-testid="stHeader"] { background-color: #1a1a1a; }
+    header[data-testid="stHeader"] {
+        background-color: #1a1a1a;
+        position: relative;
+    }
+    /* Banner "EM CONSTRUÇÃO" no header preto */
+    header[data-testid="stHeader"]::before {
+        content: "🚧  DASHBOARD EM CONSTRUÇÃO  🚧";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: #FFC107;
+        font-weight: 800;
+        font-size: 13px;
+        letter-spacing: 2px;
+        white-space: nowrap;
+        pointer-events: none;
+        text-shadow: 0 0 8px rgba(255, 193, 7, 0.25);
+    }
     section[data-testid="stSidebar"] { background-color: #1a1a1a; border-right: 1px solid #2a2a2a; }
     section[data-testid="stSidebar"] .stSelectbox label,
     section[data-testid="stSidebar"] .stNumberInput label,
@@ -50,7 +68,27 @@ CSS_MOBILLI = """
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] label { color: #f5f5f5 !important; }
-    section[data-testid="stSidebar"] [data-baseweb="select"] > div { background-color: #2a2a2a; border-color: #3a3a3a; }
+    section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+        background-color: #2a2a2a;
+        border-color: #3a3a3a;
+        color: #f5f5f5;
+    }
+    /* Texto selecionado no select fica legível */
+    section[data-testid="stSidebar"] [data-baseweb="select"] [class*="ValueContainer"],
+    section[data-testid="stSidebar"] [data-baseweb="select"] input,
+    section[data-testid="stSidebar"] [data-baseweb="select"] span { color: #f5f5f5 !important; }
+    /* Input numérico */
+    section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"] input { color: #1a1a1a !important; }
+    /* Botão "Atualizar dados" no sidebar — secundário, fundo escuro */
+    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]) {
+        background-color: #2a2a2a !important;
+        border-color: #3a3a3a !important;
+        color: #f5f5f5 !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button:not([kind="primary"]):hover {
+        background-color: #3a3a3a !important;
+        border-color: #FF6600 !important;
+    }
 
     /* ---------- Botões ---------- */
     .stButton > button {
@@ -141,7 +179,7 @@ CSS_MOBILLI = """
     }
     .mob-kpi-help {
         font-size: 11px;
-        color: #9ca3af;
+        color: #6b7280;
         margin-top: 6px;
     }
     .mob-kpi.accent-dark { border-top: 2px solid #1a1a1a; }
@@ -177,12 +215,113 @@ CSS_MOBILLI = """
     }
     .mob-hl-sub {
         font-size: 11px;
-        color: #9ca3af;
+        color: #6b7280;
         margin-top: 4px;
     }
     /* Atual recebe leve realce em laranja na borda */
     .mob-hl.parcial { border-left: 3px solid #FF6600; }
     .mob-hl.proj { border-left: 3px solid #1a1a1a; }
+
+    /* ---------- META + NÍVEL (faixa de progresso) ---------- */
+    .mob-meta-wrap {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 18px 22px;
+        margin-bottom: 24px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 18px;
+        align-items: center;
+    }
+    .mob-meta-info {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .mob-meta-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+    .mob-meta-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: #6b7280;
+        font-weight: 700;
+    }
+    .mob-meta-num {
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+        color: #1a1a1a;
+        font-weight: 600;
+    }
+    .mob-meta-num b { font-size: 18px; }
+    .mob-meta-bar {
+        height: 12px;
+        background: #f3f4f6;
+        border-radius: 6px;
+        overflow: hidden;
+        position: relative;
+    }
+    .mob-meta-fill {
+        height: 100%;
+        border-radius: 6px;
+        transition: width 0.3s ease;
+    }
+    .mob-meta-fill.bronze { background: linear-gradient(90deg, #d4a373 0%, #c08552 100%); }
+    .mob-meta-fill.prata  { background: linear-gradient(90deg, #d1d5db 0%, #9ca3af 100%); }
+    .mob-meta-fill.ouro   { background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%); }
+    /* Marca de 100% e 125% */
+    .mob-meta-bar::after {
+        content: "";
+        position: absolute;
+        top: 0; bottom: 0;
+        width: 1px;
+        background: #1a1a1a;
+        opacity: 0.35;
+        left: var(--meta-pct, 100%);
+    }
+    .mob-meta-marks {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: #9ca3af;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        margin-top: 2px;
+    }
+    .mob-nivel-badge {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 22px;
+        border-radius: 8px;
+        min-width: 130px;
+        text-align: center;
+    }
+    .mob-nivel-badge.bronze { background: #fef3e7; border: 1px solid #f0c79c; }
+    .mob-nivel-badge.prata  { background: #f3f4f6; border: 1px solid #d1d5db; }
+    .mob-nivel-badge.ouro   { background: #fef3c7; border: 1px solid #fcd34d; }
+    .mob-nivel-emoji { font-size: 26px; line-height: 1; }
+    .mob-nivel-name {
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-top: 4px;
+    }
+    .mob-nivel-badge.bronze .mob-nivel-name { color: #92400e; }
+    .mob-nivel-badge.prata  .mob-nivel-name { color: #4b5563; }
+    .mob-nivel-badge.ouro   .mob-nivel-name { color: #92400e; }
+    .mob-nivel-pct {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+    }
 
     /* ---------- VENDEDOR CARD ---------- */
     .mob-vend {
@@ -313,18 +452,19 @@ CSS_MOBILLI = """
         height: 100%;
         border-radius: 3px;
     }
-    .mob-cmp-fill.prev { background: #9ca3af; }
+    .mob-cmp-fill.prev { background: #6b7280; }
     .mob-cmp-fill.curr { background: #FF6600; }
     .mob-cmp-fill.proj {
-        background: #ffd9bf;
-        background-image: linear-gradient(45deg, transparent 25%, #ffb27a 25%, #ffb27a 50%, transparent 50%, transparent 75%, #ffb27a 75%);
+        background: #FF6600;
+        background-image: linear-gradient(45deg, rgba(255,255,255,0.55) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.55) 75%, transparent 75%);
         background-size: 8px 8px;
+        opacity: 0.85;
     }
     .mob-cmp-mini {
         display: flex;
         justify-content: space-between;
         font-size: 11px;
-        color: #6b7280;
+        color: #4b5563;
         font-variant-numeric: tabular-nums;
     }
     .mob-cmp-mini b { color: #1a1a1a; font-weight: 600; }
@@ -367,6 +507,71 @@ CSS_MOBILLI = """
     .mob-tab td.num {
         text-align: right;
         font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- TABELA DE ITENS DO RELATÓRIO ---------- */
+    .mob-tab-itens { font-size: 12px; }
+    .mob-tab-itens th, .mob-tab-itens td {
+        padding: 8px 10px;
+        white-space: nowrap;
+    }
+    .mob-tab-itens td:nth-child(4) {  /* Cliente — pode quebrar */
+        white-space: normal;
+        max-width: 220px;
+    }
+    .mob-tab-itens tr.row-devolvido td {
+        background: #fef2f2;
+        color: #7f1d1d;
+    }
+    .mob-tab-itens tr.row-devolvido:hover td { background: #fee2e2; }
+    .mob-tab-itens tfoot tr.total td {
+        font-weight: 700;
+        background: #1a1a1a;
+        color: #ffffff;
+        font-size: 14px;
+        padding: 12px 14px;
+    }
+    .mob-tab-itens tfoot tr.total td.num { font-size: 16px; }
+
+    /* ---------- TERMO DE CIÊNCIA + ASSINATURA ---------- */
+    .mob-termo {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 24px 28px;
+        margin: 28px 0 20px;
+        border-left: 3px solid #FF6600;
+    }
+    .mob-termo-titulo {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #6b7280;
+        font-weight: 800;
+        margin-bottom: 12px;
+    }
+    .mob-termo-corpo {
+        font-size: 14px;
+        color: #1a1a1a;
+        line-height: 1.6;
+        margin-bottom: 32px;
+    }
+    .mob-assinatura {
+        max-width: 420px;
+        margin-top: 28px;
+    }
+    .mob-assinatura-linha {
+        height: 1px;
+        background: #1a1a1a;
+        margin-bottom: 6px;
+    }
+    .mob-assinatura-label {
+        font-size: 11px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        text-align: center;
     }
 
     /* ---------- Tabs nativas Streamlit ---------- */

@@ -88,7 +88,7 @@ def _hero(mes: date, atualizado_em: datetime) -> None:
 
 
 def _highlights(cmp_: CaptacoesComparadas, hoje: date) -> None:
-    """3 destaques no topo: anterior cheio · atual parcial · projeção. Empresa-wide."""
+    """3 destaques no topo: anterior · atual · projeção. Empresa-wide."""
     total_ant = _total_emp(cmp_.anterior)
     total_atual = _total_emp(cmp_.atual)
     pct_proj = variacao_pct(cmp_.projecao_total, total_ant)
@@ -96,37 +96,114 @@ def _highlights(cmp_: CaptacoesComparadas, hoje: date) -> None:
     mes_ant = cmp_.anterior.mes
     mes_at = cmp_.atual.mes
 
-    # Subtítulo do "atual" — se o mês ainda não acabou, mostra "(dia X)"
     fim_at = (mes_at.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-    if hoje < fim_at and hoje.year == mes_at.year and hoje.month == mes_at.month:
-        sub_atual = f"até dia {hoje.day:02d}"
-    elif hoje < mes_at:
-        sub_atual = "ainda não iniciado"
-    else:
-        sub_atual = "mês fechado"
+    # "Em curso" inclui o último dia do mês (hoje ainda pode entrar deals)
+    mes_em_curso = (
+        hoje <= fim_at and hoje.year == mes_at.year and hoje.month == mes_at.month
+    )
+
+    sub_ant = "mês fechado"
+    sub_atual = (
+        f"parcial até {hoje.day:02d}/{mes_at.month:02d}"
+        if mes_em_curso
+        else "mês fechado" if hoje > fim_at else "ainda não iniciado"
+    )
+    sub_proj = (
+        f"estimativa de fechamento — {cmp_.du_decorridos_atual:.1f}/{cmp_.du_mes_atual:.0f} dias úteis decorridos"
+        if mes_em_curso
+        else "mês já fechado — sem projeção"
+    )
 
     st.markdown(
         f"""
         <div class="mob-hl-row">
             <div class="mob-hl">
-                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_ant))} (cheio)</div>
+                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_ant))}</div>
                 <div class="mob-hl-val">{total_ant}</div>
-                <div class="mob-hl-sub">total do mês anterior</div>
+                <div class="mob-hl-sub">{html.escape(sub_ant)}</div>
             </div>
             <div class="mob-hl parcial">
-                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_at))} ({html.escape(sub_atual)})</div>
+                <div class="mob-hl-lbl">{html.escape(mes_curto(mes_at))}</div>
                 <div class="mob-hl-val">{total_atual}</div>
-                <div class="mob-hl-sub">parcial do mês corrente</div>
+                <div class="mob-hl-sub">{html.escape(sub_atual)}</div>
             </div>
             <div class="mob-hl proj">
-                <div class="mob-hl-lbl">Projeção {html.escape(mes_curto(mes_at))}</div>
+                <div class="mob-hl-lbl">Projeção fim de {html.escape(mes_curto(mes_at))}</div>
                 <div class="mob-hl-val">~{cmp_.projecao_total} {_delta_badge(pct_proj)}</div>
-                <div class="mob-hl-sub">{cmp_.du_decorridos_atual:.1f}/{cmp_.du_mes_atual:.0f} dias úteis decorridos</div>
+                <div class="mob-hl-sub">{html.escape(sub_proj)}</div>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+# ─── META + NÍVEL ──────────────────────────────────────────────────────
+_NIVEL_VISUAL: dict[str, tuple[str, str]] = {
+    "Bronze": ("🥉", "bronze"),
+    "Prata": ("🥈", "prata"),
+    "Ouro": ("🥇", "ouro"),
+    "Sem Meta": ("🎯", "bronze"),
+}
+
+
+def _classificar_nivel(atingido: int, meta: int) -> str:
+    """TM-018: Bronze < 100% · Prata ≥ 100% · Ouro ≥ 125%."""
+    if meta <= 0:
+        return "Sem Meta"
+    pct = atingido / meta * 100
+    if pct >= 125:
+        return "Ouro"
+    if pct >= 100:
+        return "Prata"
+    return "Bronze"
+
+
+def _meta_progresso(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
+    """Faixa horizontal: progresso do mês atual contra a meta + badge de nível."""
+    total_atual = _total_emp(cmp_.atual)
+    projecao = cmp_.projecao_total
+    nivel_atual = _classificar_nivel(total_atual, meta)
+    nivel_proj = _classificar_nivel(projecao, meta)
+    emoji, cls = _NIVEL_VISUAL[nivel_atual]
+    emoji_proj, _ = _NIVEL_VISUAL[nivel_proj]
+
+    pct_atual = (total_atual / meta * 100) if meta > 0 else 0
+    largura = min(pct_atual, 130)  # cap visual em 130% pra não estourar a barra
+
+    pct_str = f"{pct_atual:.0f}%" if meta > 0 else "—"
+    proj_html = (
+        f'<div class="mob-hl-sub" style="margin-top:6px;">projeção {projecao} '
+        f'({html.escape(nivel_proj)} {emoji_proj})</div>'
+        if meta > 0 and projecao != total_atual
+        else ""
+    )
+
+    bloco = (
+        '<div class="mob-meta-wrap">'
+        '<div class="mob-meta-info">'
+        '<div class="mob-meta-head">'
+        f'<span class="mob-meta-title">Meta do time — {html.escape(mes_curto(cmp_.atual.mes))}</span>'
+        f'<span class="mob-meta-num"><b>{total_atual}</b> / {meta} captações &nbsp;·&nbsp; {pct_str}</span>'
+        '</div>'
+        '<div class="mob-meta-bar">'
+        f'<div class="mob-meta-fill {cls}" style="width:{largura:.1f}%"></div>'
+        '</div>'
+        '<div class="mob-meta-marks">'
+        '<span>0</span>'
+        f'<span>Prata · 100% ({meta})</span>'
+        f'<span>Ouro · 125% ({int(meta * 1.25)})</span>'
+        '</div>'
+        f'{proj_html}'
+        '</div>'
+        f'<div class="mob-nivel-badge {cls}">'
+        f'<div class="mob-nivel-emoji">{emoji}</div>'
+        f'<div class="mob-nivel-name">{html.escape(nivel_atual)}</div>'
+        '<div class="mob-nivel-pct">nível atual</div>'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(bloco, unsafe_allow_html=True)
 
 
 # ─── ABA: RESUMO ────────────────────────────────────────────────────────
@@ -641,6 +718,14 @@ def render() -> None:
         help="Filtra deals fechados nesse mês calendário (data de locação).",
     )
 
+    meta = st.sidebar.number_input(
+        "Meta do time (qtd captações)",
+        min_value=0,
+        value=124,
+        step=1,
+        help="Meta mensal de captações do time. Padrão: 124. Bronze < 100% · Prata ≥ 100% · Ouro ≥ 125%.",
+    )
+
     if st.sidebar.button("Atualizar dados", use_container_width=True):
         limpar_cache()
         st.rerun()
@@ -652,15 +737,32 @@ def render() -> None:
     todos_conhecidos = {**VENDEDORES, **LIDERES}
     vendedores_key = tuple(sorted(todos_conhecidos.items()))
     hoje = date.today()
-    with st.spinner("Carregando dados de vendas..."):
-        cmp_ = captacoes_comparadas_cacheadas(
-            mes_atual=mes,
-            vendedores_key=vendedores_key,
-            hoje=hoje,
+    try:
+        with st.spinner("Carregando dados de vendas..."):
+            cmp_ = captacoes_comparadas_cacheadas(
+                mes_atual=mes,
+                vendedores_key=vendedores_key,
+                hoje=hoje,
+            )
+    except Exception as exc:  # noqa: BLE001
+        # Bitrix instável (503/timeout) ou rede caiu — UX amigável + ação clara.
+        st.error(
+            "**Não consegui carregar os dados do CRM agora.**  \n"
+            f"Causa: `{type(exc).__name__}: {exc}`"
         )
+        st.info(
+            "Bitrix24 costuma responder com **503** quando recebe muitas chamadas "
+            "simultâneas. Já tentei 4× com backoff. Aguarde alguns segundos e clique "
+            "**Atualizar dados**."
+        )
+        if st.button("Tentar novamente", type="primary"):
+            limpar_cache()
+            st.rerun()
+        st.stop()
 
     _hero(mes, datetime.now())
     _highlights(cmp_, hoje)
+    _meta_progresso(cmp_, meta, hoje)
 
     tab_resumo, tab_evol, tab_cons, tab_prod = st.tabs(
         ["Resumo", "Evolução", "Consultores", "Produtividade"]

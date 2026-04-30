@@ -27,6 +27,9 @@ docs/*.docx
 # Imagens avulsas
 image.png
 image copy.png
+dashboard-*.png
+relatorio-*.png
+.playwright-mcp/
 
 # Assets de fontes
 dejavu.zip
