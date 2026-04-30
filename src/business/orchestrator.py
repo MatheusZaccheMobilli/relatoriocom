@@ -656,3 +656,53 @@ def captacoes_comparadas(
         du_decorridos_atual=du_decorridos,
         du_mes_anterior=du_total_ant,
     )
+
+
+def _meses_ate(mes_floor: date, mes_topo: date) -> list[date]:
+    """Lista de primeiros-dia-do-mês de `mes_floor` até `mes_topo`, inclusivo."""
+    floor = _primeiro_dia_mes(mes_floor)
+    topo = _primeiro_dia_mes(mes_topo)
+    out: list[date] = []
+    m = floor
+    while m <= topo:
+        out.append(m)
+        m = (m + relativedelta(months=1)).replace(day=1)
+    return out
+
+
+def serie_historica(
+    mes_floor: date,
+    mes_topo: date,
+    vendedores: dict[int, str],
+) -> list[CaptacoesMes]:
+    """Série de CaptacoesMes mês-a-mês do `mes_floor` até `mes_topo` (inclusivo).
+
+    Tudo em paralelo (3 chamadas Bitrix por mês × N meses, gated em 4
+    conexões simultâneas pelo semáforo do bitrix client) + 1 chamada
+    consolidada de devoluções pra todas as placas da janela.
+
+    Para 6 meses: 18 chamadas de deals serializadas em ondas de 4, totalizando
+    ~5 ondas. Aceitável e bem mais rápido que sequencial.
+    """
+    meses = _meses_ate(mes_floor, mes_topo)
+    if not meses:
+        return []
+
+    deals_por_mes = _fetch_deals_paralelo(meses)
+
+    todas_placas = [
+        d.placa
+        for ds in deals_por_mes.values()
+        for d in ds
+        if d.placa
+    ]
+    devolucoes_por_placa = (
+        bitrix.buscar_devolucoes_por_placas(todas_placas) if todas_placas else {}
+    )
+
+    return [
+        _build_captacoes_mes_de_deals(
+            mes, deals_por_mes[mes], devolucoes_por_placa, vendedores,
+        )
+        for mes in meses
+    ]

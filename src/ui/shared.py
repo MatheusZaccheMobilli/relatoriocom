@@ -17,8 +17,8 @@ MESES_PT: dict[int, str] = {
 
 # Primeiro mês com a regra nova vigente (limita opções no relatório)
 PRIMEIRO_MES_VIGENTE = date(2026, 5, 1)
-# Primeiro mês visível no dashboard de captações = M-1 do primeiro pagamento
-PRIMEIRO_MES_CAPTACAO = date(2026, 4, 1)
+# Primeiro mês visível no dashboard de captações = março/2026 (histórico desde aqui)
+PRIMEIRO_MES_CAPTACAO = date(2026, 3, 1)
 
 NIVEL_BADGES: dict[str, str] = {
     "Ouro": "🥇 Ouro",

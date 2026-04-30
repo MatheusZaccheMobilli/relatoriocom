@@ -14,6 +14,7 @@ from src.business.orchestrator import (
     captacoes_comparadas,
     captacoes_no_mes,
     montar_relatorio,
+    serie_historica,
 )
 from src.models import CaptacoesComparadas, CaptacoesMes, RelatorioData
 
@@ -64,8 +65,26 @@ def captacoes_comparadas_cacheadas(
     )
 
 
+@st.cache_data(ttl=_TTL_SEGUNDOS, show_spinner=False)
+def serie_historica_cacheada(
+    mes_floor: date,
+    mes_topo: date,
+    vendedores_key: tuple[tuple[int, str], ...],
+) -> list[CaptacoesMes]:
+    """Versão cacheada de `serie_historica` (5min).
+
+    Retorna a série completa de meses entre floor e topo. Usado pelos
+    gráficos históricos (todos os meses desde março).
+    """
+    vendedores = dict(vendedores_key)
+    return serie_historica(
+        mes_floor=mes_floor, mes_topo=mes_topo, vendedores=vendedores
+    )
+
+
 def limpar_cache() -> None:
     """Invalida todo o cache de dados — usado pelo botão 'Atualizar agora'."""
     relatorio_cacheado.clear()
     captacoes_cacheadas.clear()
     captacoes_comparadas_cacheadas.clear()
+    serie_historica_cacheada.clear()

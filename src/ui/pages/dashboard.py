@@ -17,7 +17,11 @@ import streamlit as st
 
 from src.auth import papel_por_id, tem_visao_completa, todos_nomes_conhecidos
 from src.models import CaptacoesComparadas, CaptacoesMes, CaptacoesVendedor
-from src.ui.data import captacoes_comparadas_cacheadas, limpar_cache
+from src.ui.data import (
+    captacoes_comparadas_cacheadas,
+    limpar_cache,
+    serie_historica_cacheada,
+)
 from src.ui.shared import (
     PRIMEIRO_MES_CAPTACAO,
     classe_delta,
@@ -332,10 +336,111 @@ def _acumulado_diario(snap: CaptacoesMes) -> dict[int, int]:
     return acum
 
 
-def _tab_evolucao(cmp_: CaptacoesComparadas) -> None:
+def _historico_mensal(serie: list[CaptacoesMes]) -> None:
+    """Renderiza dois charts: linha por tipo (Loc/Vnd/Total) ao longo dos meses,
+    e dual-axis (barras mensais + linha acumulada YTD).
+    """
+    _md('<div class="mob-section-title">Histórico mensal — desde Mar/2026</div>')
+
+    rows = []
+    for snap in serie:
+        rotulo = mes_curto(snap.mes)
+        rows.append({"Mês": rotulo, "ord": snap.mes.toordinal(),
+                     "Tipo": "Locação", "Captações": snap.locacoes_total})
+        rows.append({"Mês": rotulo, "ord": snap.mes.toordinal(),
+                     "Tipo": "Venda", "Captações": snap.vendas_total})
+        rows.append({"Mês": rotulo, "ord": snap.mes.toordinal(),
+                     "Tipo": "Total", "Captações": snap.total_empresa})
+    df_serie = pd.DataFrame(rows)
+    ordem_meses = [mes_curto(s.mes) for s in serie]
+
+    # Chart 1: linha por tipo (Loc/Vnd/Total)
+    chart_serie = (
+        alt.Chart(df_serie)
+        .mark_line(point=alt.OverlayMarkDef(filled=True, size=80), strokeWidth=3)
+        .encode(
+            x=alt.X("Mês:N", title=None, sort=ordem_meses,
+                    axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
+            y=alt.Y("Captações:Q", title=None,
+                    axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
+            color=alt.Color(
+                "Tipo:N",
+                scale=alt.Scale(
+                    domain=["Total", "Locação", "Venda"],
+                    range=["#1a1a1a", "#FF6600", "#6b7280"],
+                ),
+                legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
+            ),
+            tooltip=["Mês", "Tipo", "Captações"],
+        )
+        .properties(height=300, background="#ffffff")
+        .configure_view(strokeWidth=0)
+        .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
+        .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
+    )
+    st.altair_chart(chart_serie, use_container_width=True)
+
+    # Chart 2: dual-axis — barras (mês) + linha (acumulado YTD)
+    st.markdown("&nbsp;")
+    _md('<div class="mob-section-title">Captações do mês × acumulado</div>')
+
+    acumulado = 0
+    rows_dual = []
+    for snap in serie:
+        acumulado += snap.total_empresa
+        rows_dual.append({
+            "Mês": mes_curto(snap.mes),
+            "ord": snap.mes.toordinal(),
+            "Captações": snap.total_empresa,
+            "Acumulado": acumulado,
+        })
+    df_dual = pd.DataFrame(rows_dual)
+
+    base = alt.Chart(df_dual).encode(
+        x=alt.X("Mês:N", title=None, sort=ordem_meses,
+                axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
+    )
+    barras = base.mark_bar(cornerRadiusEnd=4, color="#FF6600", size=40).encode(
+        y=alt.Y("Captações:Q", title="Captações no mês",
+                axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False,
+                              titleColor="#FF6600", labelColor="#1a1a1a")),
+        tooltip=["Mês", "Captações"],
+    )
+    linha = base.mark_line(
+        point=alt.OverlayMarkDef(filled=True, size=80, color="#1a1a1a"),
+        strokeWidth=3, color="#1a1a1a",
+    ).encode(
+        y=alt.Y("Acumulado:Q", title="Acumulado",
+                axis=alt.Axis(grid=False, domain=False,
+                              titleColor="#1a1a1a", labelColor="#1a1a1a", orient="right")),
+        tooltip=["Mês", "Acumulado"],
+    )
+    chart_dual = (
+        alt.layer(barras, linha)
+        .resolve_scale(y="independent")
+        .properties(height=280, background="#ffffff")
+        .configure_view(strokeWidth=0)
+        .configure_axis(titleFontSize=11, titleFontWeight="bold")
+    )
+    st.altair_chart(chart_dual, use_container_width=True)
+
+
+def _tab_evolucao(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> None:
     nome_ant = mes_curto(cmp_.anterior.mes)
     nome_at = mes_curto(cmp_.atual.mes)
 
+    # ─── Histórico mensal (todos os meses desde março) ─────────
+    if len(serie) >= 2:
+        _historico_mensal(serie)
+        st.markdown("&nbsp;")
+    else:
+        st.info(
+            "**Histórico mensal vai aparecer aqui** quando houver pelo menos "
+            "2 meses fechados a partir de Mar/2026."
+        )
+        st.markdown("&nbsp;")
+
+    # ─── Acumulado dia a dia (recorte do mês atual vs anterior) ─
     acum_ant = _acumulado_diario(cmp_.anterior)
     acum_at = _acumulado_diario(cmp_.atual)
 
@@ -347,7 +452,7 @@ def _tab_evolucao(cmp_: CaptacoesComparadas) -> None:
         {"Dia": d, "Mês": nome_at, "Captações": acum_at.get(d, 0)} for d in dias
     ])
 
-    _md('<div class="mob-section-title">Acumulado dia a dia</div>')
+    _md(f'<div class="mob-section-title">Acumulado dia a dia — {html.escape(nome_ant)} × {html.escape(nome_at)}</div>')
 
     chart = (
         alt.Chart(df)
@@ -475,6 +580,12 @@ def _tab_vendedores(cmp_: CaptacoesComparadas) -> None:
                 v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
                 with col:
                     _card_vendedor(v, v_ant, label_ant=nome_ant, label_at=nome_at)
+    else:
+        st.info(
+            f"**Nenhuma captação em {nome_at}** ainda. Os cards aparecem aqui "
+            "assim que o primeiro deal WON entrar no mês."
+        )
+        return
 
     if len(ord_atual) > TOP_N:
         st.caption(f"Exibindo top {TOP_N} vendedores. Restante na tabela abaixo.")
@@ -679,6 +790,11 @@ def render() -> None:
                 vendedores_key=vendedores_key,
                 hoje=hoje,
             )
+            serie = serie_historica_cacheada(
+                mes_floor=PRIMEIRO_MES_CAPTACAO,
+                mes_topo=mes,
+                vendedores_key=vendedores_key,
+            )
     except Exception as exc:  # noqa: BLE001
         # Bitrix instável (503/timeout) ou rede caiu — UX amigável + ação clara.
         st.error(
@@ -706,7 +822,7 @@ def render() -> None:
     with tab_resumo:
         _tab_resumo(cmp_)
     with tab_evol:
-        _tab_evolucao(cmp_)
+        _tab_evolucao(cmp_, serie)
     with tab_vend:
         _tab_vendedores(cmp_)
     with tab_prod:
