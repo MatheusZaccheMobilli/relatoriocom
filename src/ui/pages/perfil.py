@@ -131,23 +131,49 @@ def _tab_origem(itens: list[CaptacaoItem]) -> None:
     ordem = totais["Origem"].tolist()
     total_geral = totais["Captações"].sum()
 
+    # Posição central de cada segmento, pra rótulo branco dentro da barra
+    df_pos = df.copy()
+    df_pos["TipoOrder"] = df_pos["Tipo"].map({"Locação": 0, "Venda": 1})
+    df_pos = df_pos.sort_values(["Origem", "TipoOrder"])
+    df_pos["cumsum"] = df_pos.groupby("Origem")["Captações"].cumsum()
+    df_pos["mid"] = df_pos["cumsum"] - df_pos["Captações"] / 2
+
     _md('<div class="mob-section-title">Ranking de origens</div>')
 
+    bars = alt.Chart(df).mark_bar(cornerRadiusEnd=3, height=18).encode(
+        y=alt.Y("Origem:N", title=None, sort=ordem,
+                axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
+        x=alt.X("Captações:Q", title=None, stack="zero",
+                axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
+        color=alt.Color(
+            "Tipo:N",
+            scale=alt.Scale(domain=["Locação", "Venda"], range=["#FF6600", "#1a1a1a"]),
+            legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
+        ),
+        tooltip=["Origem", "Tipo", "Captações"],
+    )
+    labels_seg = alt.Chart(df_pos).mark_text(
+        align="center", baseline="middle",
+        color="#ffffff", fontWeight=700, fontSize=11,
+    ).encode(
+        y=alt.Y("Origem:N", sort=ordem),
+        x=alt.X("mid:Q"),
+        text=alt.condition(
+            "datum.Captações >= 2",
+            alt.Text("Captações:Q", format=","),
+            alt.value(""),
+        ),
+    )
+    labels_total = alt.Chart(totais).mark_text(
+        align="left", baseline="middle", dx=4,
+        color="#1a1a1a", fontWeight=700, fontSize=12,
+    ).encode(
+        y=alt.Y("Origem:N", sort=ordem),
+        x=alt.X("Captações:Q"),
+        text=alt.Text("Captações:Q", format=","),
+    )
     chart = (
-        alt.Chart(df)
-        .mark_bar(cornerRadiusEnd=3, height=18)
-        .encode(
-            y=alt.Y("Origem:N", title=None, sort=ordem,
-                    axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
-            x=alt.X("Captações:Q", title=None, stack="zero",
-                    axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
-            color=alt.Color(
-                "Tipo:N",
-                scale=alt.Scale(domain=["Locação", "Venda"], range=["#FF6600", "#1a1a1a"]),
-                legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
-            ),
-            tooltip=["Origem", "Tipo", "Captações"],
-        )
+        (bars + labels_seg + labels_total)
         .properties(height=max(220, 35 * len(ordem)), background="#ffffff")
         .configure_view(strokeWidth=0)
         .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
@@ -212,26 +238,52 @@ def _tab_geografia(itens: list[CaptacaoItem]) -> None:
     totais = df.groupby("Cidade", as_index=False)["Captações"].sum()
     totais = totais.sort_values("Captações", ascending=False).head(15)
     ordem = totais["Cidade"].tolist()
-    df_top = df[df["Cidade"].isin(ordem)]
+    df_top = df[df["Cidade"].isin(ordem)].copy()
     total_top = totais["Captações"].sum()
+
+    # Posição central de cada segmento, pra rótulo branco dentro da barra
+    df_pos = df_top.copy()
+    df_pos["TipoOrder"] = df_pos["Tipo"].map({"Locação": 0, "Venda": 1})
+    df_pos = df_pos.sort_values(["Cidade", "TipoOrder"])
+    df_pos["cumsum"] = df_pos.groupby("Cidade")["Captações"].cumsum()
+    df_pos["mid"] = df_pos["cumsum"] - df_pos["Captações"] / 2
 
     _md('<div class="mob-section-title">Top 15 cidades</div>')
 
+    bars = alt.Chart(df_top).mark_bar(cornerRadiusEnd=3, height=18).encode(
+        y=alt.Y("Cidade:N", title=None, sort=ordem,
+                axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
+        x=alt.X("Captações:Q", title=None, stack="zero",
+                axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
+        color=alt.Color(
+            "Tipo:N",
+            scale=alt.Scale(domain=["Locação", "Venda"], range=["#FF6600", "#1a1a1a"]),
+            legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
+        ),
+        tooltip=["Cidade", "Tipo", "Captações"],
+    )
+    labels_seg = alt.Chart(df_pos).mark_text(
+        align="center", baseline="middle",
+        color="#ffffff", fontWeight=700, fontSize=11,
+    ).encode(
+        y=alt.Y("Cidade:N", sort=ordem),
+        x=alt.X("mid:Q"),
+        text=alt.condition(
+            "datum.Captações >= 2",
+            alt.Text("Captações:Q", format=","),
+            alt.value(""),
+        ),
+    )
+    labels_total = alt.Chart(totais).mark_text(
+        align="left", baseline="middle", dx=4,
+        color="#1a1a1a", fontWeight=700, fontSize=12,
+    ).encode(
+        y=alt.Y("Cidade:N", sort=ordem),
+        x=alt.X("Captações:Q"),
+        text=alt.Text("Captações:Q", format=","),
+    )
     chart = (
-        alt.Chart(df_top)
-        .mark_bar(cornerRadiusEnd=3, height=18)
-        .encode(
-            y=alt.Y("Cidade:N", title=None, sort=ordem,
-                    axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
-            x=alt.X("Captações:Q", title=None, stack="zero",
-                    axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a")),
-            color=alt.Color(
-                "Tipo:N",
-                scale=alt.Scale(domain=["Locação", "Venda"], range=["#FF6600", "#1a1a1a"]),
-                legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
-            ),
-            tooltip=["Cidade", "Tipo", "Captações"],
-        )
+        (bars + labels_seg + labels_total)
         .properties(height=max(280, 32 * len(ordem)), background="#ffffff")
         .configure_view(strokeWidth=0)
         .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
@@ -266,18 +318,25 @@ def _tab_plano(itens: list[CaptacaoItem]) -> None:
                 {"Tipo": "Locação", "Captações": n_loc},
                 {"Tipo": "Venda", "Captações": n_vnd},
             ])
+            arc_op = alt.Chart(df_op).mark_arc(
+                innerRadius=70, stroke="#ffffff", strokeWidth=3
+            ).encode(
+                theta=alt.Theta("Captações:Q", stack=True),
+                color=alt.Color(
+                    "Tipo:N",
+                    scale=alt.Scale(domain=["Locação", "Venda"], range=["#FF6600", "#1a1a1a"]),
+                    legend=alt.Legend(orient="bottom", title=None, labelFontSize=13, labelColor="#1a1a1a"),
+                ),
+                tooltip=["Tipo", "Captações"],
+            )
+            text_op = alt.Chart(df_op).mark_text(
+                radius=105, color="#ffffff", fontSize=15, fontWeight=700,
+            ).encode(
+                theta=alt.Theta("Captações:Q", stack=True),
+                text=alt.Text("Captações:Q", format=","),
+            )
             chart_op = (
-                alt.Chart(df_op)
-                .mark_arc(innerRadius=70, stroke="#ffffff", strokeWidth=3)
-                .encode(
-                    theta="Captações:Q",
-                    color=alt.Color(
-                        "Tipo:N",
-                        scale=alt.Scale(domain=["Locação", "Venda"], range=["#FF6600", "#1a1a1a"]),
-                        legend=alt.Legend(orient="bottom", title=None, labelFontSize=13, labelColor="#1a1a1a"),
-                    ),
-                    tooltip=["Tipo", "Captações"],
-                )
+                (arc_op + text_op)
                 .properties(height=280, background="#ffffff")
                 .configure_view(strokeWidth=0)
                 .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
@@ -300,18 +359,25 @@ def _tab_plano(itens: list[CaptacaoItem]) -> None:
                 {"Plano": "Semanal", "Captações": n_sem},
                 {"Plano": "Mensal", "Captações": n_men},
             ])
+            arc_plano = alt.Chart(df_plano).mark_arc(
+                innerRadius=70, stroke="#ffffff", strokeWidth=3
+            ).encode(
+                theta=alt.Theta("Captações:Q", stack=True),
+                color=alt.Color(
+                    "Plano:N",
+                    scale=alt.Scale(domain=["Semanal", "Mensal"], range=["#FF6600", "#6b7280"]),
+                    legend=alt.Legend(orient="bottom", title=None, labelFontSize=13, labelColor="#1a1a1a"),
+                ),
+                tooltip=["Plano", "Captações"],
+            )
+            text_plano = alt.Chart(df_plano).mark_text(
+                radius=105, color="#ffffff", fontSize=15, fontWeight=700,
+            ).encode(
+                theta=alt.Theta("Captações:Q", stack=True),
+                text=alt.Text("Captações:Q", format=","),
+            )
             chart_plano = (
-                alt.Chart(df_plano)
-                .mark_arc(innerRadius=70, stroke="#ffffff", strokeWidth=3)
-                .encode(
-                    theta="Captações:Q",
-                    color=alt.Color(
-                        "Plano:N",
-                        scale=alt.Scale(domain=["Semanal", "Mensal"], range=["#FF6600", "#6b7280"]),
-                        legend=alt.Legend(orient="bottom", title=None, labelFontSize=13, labelColor="#1a1a1a"),
-                    ),
-                    tooltip=["Plano", "Captações"],
-                )
+                (arc_plano + text_plano)
                 .properties(height=280, background="#ffffff")
                 .configure_view(strokeWidth=0)
                 .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
