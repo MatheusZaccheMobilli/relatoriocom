@@ -119,26 +119,6 @@ def _tabela_itens(itens: list, total_comissao) -> None:
     )
 
 
-def _termo_ciencia(nome_vendedor: str, mes_pagamento) -> None:
-    st.markdown(
-        f"""
-        <div class="mob-termo">
-            <div class="mob-termo-titulo">Termo de Ciência</div>
-            <div class="mob-termo-corpo">
-                Eu, <b>{html.escape(nome_vendedor)}</b>, declaro que li e concordo com
-                os dados de comissão apresentados acima, referentes ao mês de pagamento
-                <b>{html.escape(mes_ano_label(mes_pagamento))}</b>.
-            </div>
-            <div class="mob-assinatura">
-                <div class="mob-assinatura-linha"></div>
-                <div class="mob-assinatura-label">Assinatura do vendedor</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def render() -> None:
     # ── Sidebar ─────────────────────────────────────────────────────
     st.sidebar.title("Filtros")
@@ -299,8 +279,7 @@ def render() -> None:
     )
     _tabela_itens(relatorio.itens, relatorio.total_comissao)
 
-    # ── Termo de ciência + assinatura ──────────────────────────────
-    _termo_ciencia(relatorio.vendedor.nome, mes_pagamento)
+    # Termo de ciência + assinatura ficam APENAS no PDF (não na tela).
 
     # ── Downloads ───────────────────────────────────────────────────
     pdf_bytes = gerar_pdf(relatorio)
