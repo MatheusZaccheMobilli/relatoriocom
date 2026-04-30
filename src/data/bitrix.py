@@ -18,6 +18,40 @@ PIPELINE_LOCACAO = 48           # Locação APP (fluxo principal)
 PIPELINE_LOCACAO_SHOWROOM = 0   # Locação Showroom (presencial)
 PIPELINE_VENDA = 40
 
+# Catálogo de origens (SOURCE_ID → nome legível) — extraído do Bitrix via
+# crm.status.list ENTITY_ID=SOURCE. Mantém em código pra:
+#   1. Não fazer 1 chamada extra ao Bitrix por load (catálogo muda raramente)
+#   2. Permitir agrupar fontes parecidas (vários WhatsApp viram "WhatsApp")
+SOURCES_LABELS: dict[str, str] = {
+    "EMAIL": "Formulário Showroom",
+    "TRADE_SHOW": "Formulário Parceiros",
+    "2|WHATSAPP": "Meta",
+    "ADVERTISING": "Google Ads",
+    "CALL": "Chamada",
+    "WEB": "Site",
+    "PARTNER": "Cliente Existente",
+    "RECOMMENDATION": "Recomendação",
+    "BOOKING": "Agendamento on-line",
+    "WEBFORM": "Formulário CRM",
+    "CALLBACK": "Retorno de Chamada",
+    "RC_GENERATOR": "Canal de Marketing",
+    "36|OPENLINE": "Bate-papo ao vivo",
+    "42|WHATSAPP": "WhatsApp Disparo MKT",
+    "32|BITRIX_WHATCRM_NET_70680444": "WhatsApp",
+    "STORE": "Loja on-line",
+    "UC_060700": "E-mail",
+    "REPEAT_SALE": "Vendas recorrentes",
+    "UC_0X6HPK": "Credere",
+    "UC_IKCQBG": "Aplicativo",
+}
+
+
+def label_source(source_id: str) -> str:
+    """Retorna nome legível de um SOURCE_ID. Fallback: o próprio ID."""
+    if not source_id:
+        return "Sem origem"
+    return SOURCES_LABELS.get(source_id, source_id)
+
 # Limite global de conexões simultâneas ao Bitrix.
 # 6 = sweet spot pra dashboard (3 pipelines × 2 meses cabem em 1 wave).
 # Mais que ~10 começa a estourar 503.
@@ -123,11 +157,12 @@ def buscar_deals(pipeline_id: int, fecha_inicio: date, fecha_fim: date) -> list[
         "select[]": [
             "ID", "TITLE", "CATEGORY_ID", "STAGE_ID",
             "ASSIGNED_BY_ID", "CONTACT_ID", "OPPORTUNITY",
-            "CLOSEDATE",
+            "CLOSEDATE", "SOURCE_ID",
             "UF_CRM_1730135950688",   # CPF/CNPJ no deal
             "UF_CRM_1749815964662",   # Placa
             "UF_CRM_1743092456783",   # Data locação/venda
             "UF_CRM_WEEKLY_SUBSCRIPTION",  # Plano semanal
+            "UF_CRM_1744638028",      # Cidade do cliente (replicado no deal)
         ],
     }
 
@@ -153,6 +188,8 @@ def buscar_deals(pipeline_id: int, fecha_inicio: date, fecha_fim: date) -> list[
                 placa=d.get("UF_CRM_1749815964662") or "",
                 plano_semanal=is_semanal,
                 data_fechamento=_parse_date(d.get("CLOSEDATE")),
+                source_id=(d.get("SOURCE_ID") or "").strip(),
+                cidade=(d.get("UF_CRM_1744638028") or "").strip(),
             )
         )
 

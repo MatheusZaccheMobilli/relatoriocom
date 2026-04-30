@@ -14,7 +14,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import streamlit as st
 
-from src.ui.pages import dashboard
+from src.ui.pages import dashboard, perfil
 from src.ui.shared import aplicar_css
 
 st.set_page_config(
@@ -32,18 +32,8 @@ PAGINA_DASHBOARD = st.Page(
     default=True,
 )
 
-
-def _perfil_placeholder() -> None:
-    st.title("Perfil do Cliente")
-    st.info(
-        "**Em construção.** Análise demográfica e contratual dos clientes — "
-        "idade, cidade, origem do lead, tipo de plano. "
-        "Dados desde Mar/2026."
-    )
-
-
 PAGINA_PERFIL = st.Page(
-    _perfil_placeholder,
+    perfil.render,
     title="Perfil do Cliente",
     url_path="perfil",
 )

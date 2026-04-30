@@ -44,6 +44,8 @@ class Deal:
     placa: str  # UF_CRM_1749815964662 (deal) ou UF_CRM_1723028259246 (contato)
     plano_semanal: bool  # UF_CRM_WEEKLY_SUBSCRIPTION != "não"
     data_fechamento: Optional[date]
+    source_id: str = ""  # SOURCE_ID — origem do lead (ver bitrix.SOURCES_LABELS)
+    cidade: str = ""  # UF_CRM_1744638028 — cidade do cliente (replicada no deal)
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,9 @@ class CaptacaoItem:
     data_locacao: Optional[date]
     data_devolucao: Optional[date] = None
     devolvido: bool = False
+    source_id: str = ""  # SOURCE_ID — origem do lead (ver bitrix.SOURCES_LABELS)
+    cidade: str = ""  # cidade do cliente (UF_CRM_1744638028 do deal)
+    plano_semanal: bool = False  # True só faz sentido em locação
 
 
 @dataclass(frozen=True)
@@ -148,6 +153,10 @@ class CaptacoesMes:
     locacoes_mensal: int = 0
     # Total de captações devolvidas (pipeline 22) detectadas neste mês.
     devolvidos_total: int = 0
+    # Lista flat de TODAS as captações (mesmo orphans sem vendedor),
+    # consumida pela página de Perfil do Cliente para agregações por
+    # source/cidade/tipo. Inclui source_id, cidade e plano_semanal.
+    captacoes_flat: list[CaptacaoItem] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

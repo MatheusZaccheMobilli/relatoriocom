@@ -563,6 +563,7 @@ def _build_captacoes_mes_de_deals(
     # Auto-descobre TODOS os captadores que aparecem nos deals
     captadores_ids: set[int] = {d.assigned_by_id for d in todos_deals if d.assigned_by_id}
     por_vid: dict[int, list[CaptacaoItem]] = {vid: [] for vid in captadores_ids}
+    captacoes_flat: list[CaptacaoItem] = []
     devolvidos_total = 0
 
     for d in todos_deals:
@@ -582,10 +583,7 @@ def _build_captacoes_mes_de_deals(
         if deal_devolvido:
             devolvidos_total += 1
 
-        if not d.assigned_by_id:
-            continue
-
-        por_vid[d.assigned_by_id].append(CaptacaoItem(
+        item = CaptacaoItem(
             deal_id=d.id,
             tipo_operacao=_tipo_operacao_do_pipeline(d.pipeline_id),
             nome_cliente=d.titulo,
@@ -593,7 +591,14 @@ def _build_captacoes_mes_de_deals(
             data_locacao=d.data_locacao,
             data_devolucao=data_dev,
             devolvido=deal_devolvido,
-        ))
+            source_id=d.source_id,
+            cidade=d.cidade,
+            plano_semanal=d.plano_semanal,
+        )
+        captacoes_flat.append(item)
+
+        if d.assigned_by_id:
+            por_vid[d.assigned_by_id].append(item)
 
     # Nome: VENDEDORES → LIDERES → fallback "Vendedor #ID"
     por_vendedor = [
@@ -616,6 +621,7 @@ def _build_captacoes_mes_de_deals(
         locacoes_semanal=locacoes_semanal,
         locacoes_mensal=locacoes_mensal,
         devolvidos_total=devolvidos_total,
+        captacoes_flat=captacoes_flat,
     )
 
 
