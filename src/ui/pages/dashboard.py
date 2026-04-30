@@ -773,6 +773,14 @@ def render() -> None:
         st.rerun()
 
     st.sidebar.caption("Atualização automática a cada 5 min")
+    _last = st.session_state.get("_load_elapsed")
+    if _last is not None:
+        if _last < 1.5:
+            st.sidebar.caption(f"⚡ Cache: {_last:.2f}s (instantâneo)")
+        elif _last < 8:
+            st.sidebar.caption(f"🟢 Bitrix: {_last:.1f}s")
+        else:
+            st.sidebar.caption(f"🟡 Bitrix lento: {_last:.1f}s — possível 503 com retry")
 
     # ── carrega dados ──────────────────────────────────────────────
     # Vendedores ativos + líderes + outros captadores conhecidos (sócio, robô, pós-venda).
@@ -780,6 +788,8 @@ def render() -> None:
     todos_conhecidos = todos_nomes_conhecidos()
     vendedores_key = tuple(sorted(todos_conhecidos.items()))
     hoje = date.today()
+    import time as _time
+    _t0 = _time.perf_counter()
     try:
         # Único fetch ao Bitrix: a série histórica. O comparativo MoM é
         # derivado dessa série sem refetch (era 12 chamadas Bitrix → agora 6).
@@ -795,6 +805,8 @@ def render() -> None:
                 vendedores_key=vendedores_key,
             )
             cmp_ = cmp_de_serie(serie, mes_atual=mes, hoje=hoje)
+        _elapsed = _time.perf_counter() - _t0
+        st.session_state["_load_elapsed"] = _elapsed
     except Exception as exc:  # noqa: BLE001
         # Bitrix instável (503/timeout) ou rede caiu — UX amigável + ação clara.
         st.error(
