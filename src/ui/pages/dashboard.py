@@ -37,6 +37,11 @@ from src.ui.shared import (
 )
 
 
+# Meta de captações do time, ajustada manualmente a cada mês pelo RH.
+# Trocar este valor antes do primeiro dia útil do mês seguinte.
+META_TIME: int = 184
+
+
 def _brl_compacto(v: Decimal | float | int) -> str:
     """Formata R$ de forma compacta para card: R$ 312k, R$ 1,2M, R$ 850."""
     f = float(v)
@@ -179,6 +184,30 @@ def _highlights(
     else:
         nudge = "informe a meta no sidebar"
 
+    # Tooltip explicando como a projeção é calculada
+    du_dec = cmp_.du_decorridos_atual
+    du_tot = cmp_.du_mes_atual
+    if em_curso and du_dec > 0:
+        du_dec_str = f"{du_dec:.1f}".replace(".", ",")
+        du_tot_str = f"{du_tot:.1f}".replace(".", ",")
+        proj_tip = (
+            "<b>Como a projeção é calculada</b><br/>"
+            "Captações até hoje ÷ dias úteis decorridos × "
+            "dias úteis totais do mês."
+            "<br/><br/>"
+            f"Hoje: {total_atual} ÷ {du_dec_str} × {du_tot_str} ≈ {proj}"
+            "<br/><br/>"
+            "Dias úteis ponderados (Seg–Sex = 1, Sáb = 0,5, "
+            "Dom/feriado = 0). Quanto mais o mês avança, mais "
+            "precisa fica a estimativa."
+        )
+    else:
+        proj_tip = (
+            "<b>Mês fechado</b><br/>"
+            f"Não há mais dias úteis no mês — a projeção é igual "
+            f"ao total realizado ({total_atual})."
+        )
+
     # Card 4: Acumulado YTD desde Mar/2026
     _, _, ytd_total, ytd_meses = _ytd_totais(serie, mes_at)
     primeiro = mes_curto(PRIMEIRO_MES_CAPTACAO)
@@ -201,7 +230,7 @@ def _highlights(
                 <div class="mob-hl-sub">{sub_fat}</div>
             </div>
             <div class="mob-hl proj">
-                <div class="mob-hl-lbl">Projeção fim de {html.escape(nome_at)}</div>
+                <div class="mob-hl-lbl">Projeção fim de {html.escape(nome_at)}<span class="mob-hl-info" tabindex="0">!<span class="mob-hl-tip">{proj_tip}</span></span></div>
                 <div class="mob-hl-val">~{proj}</div>
                 <div class="mob-hl-sub">{html.escape(nudge)}</div>
             </div>
@@ -1056,11 +1085,9 @@ def render() -> None:
         format_func=mes_ano_label,
     )
 
-    meta = st.sidebar.number_input(
-        "Meta do time (qtd captações)",
-        min_value=0,
-        value=0,
-        step=1,
+    meta = META_TIME
+    st.sidebar.markdown(
+        f"**Meta do time:** {meta} captações"
     )
 
     st.sidebar.caption("Atualização automática a cada 30 min")

@@ -258,6 +258,54 @@ CSS_MOBILLI = """
     .mob-hl.proj { border-left: 3px solid #1a1a1a; }
     .mob-hl.ytd { border-left: 3px solid #6b7280; }
 
+    /* Ícone de info (!) com tooltip CSS no hover */
+    .mob-hl-info {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        margin-left: 6px;
+        border-radius: 50%;
+        background: #6b7280;
+        color: #ffffff;
+        font-size: 9px;
+        font-weight: 700;
+        cursor: help;
+        position: relative;
+        vertical-align: middle;
+        line-height: 1;
+    }
+    .mob-hl-info .mob-hl-tip {
+        visibility: hidden;
+        opacity: 0;
+        width: 280px;
+        background: #1f2937;
+        color: #f3f4f6;
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        line-height: 1.5;
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 9999;
+        transition: opacity 0.15s ease;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+        pointer-events: none;
+        white-space: normal;
+    }
+    .mob-hl-info:hover .mob-hl-tip,
+    .mob-hl-info:focus .mob-hl-tip {
+        visibility: visible;
+        opacity: 1;
+    }
+    .mob-hl-tip b { color: #ffffff; }
+
     /* ---------- META + NÍVEL (faixa de progresso) ---------- */
     .mob-meta-wrap {
         background: #ffffff;
