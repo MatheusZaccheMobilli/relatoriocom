@@ -258,6 +258,59 @@ CSS_MOBILLI = """
     .mob-hl.proj { border-left: 3px solid #1a1a1a; }
     .mob-hl.ytd { border-left: 3px solid #6b7280; }
 
+    /* Legenda manual para gráficos Altair de múltiplas séries */
+    .mob-chart-legend {
+        display: flex;
+        gap: 20px;
+        font-size: 12px;
+        color: #4b5563;
+        margin-bottom: 6px;
+        padding-left: 4px;
+        align-items: center;
+    }
+    .mob-chart-legend .item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .mob-chart-legend .swatch-bar {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+        background: #FF6600;
+    }
+    .mob-chart-legend .swatch-line {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 14px;
+        position: relative;
+    }
+    .mob-chart-legend .swatch-line::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 3px;
+        background: #1a1a1a;
+        border-radius: 2px;
+        transform: translateY(-50%);
+    }
+    .mob-chart-legend .swatch-line::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 8px;
+        height: 8px;
+        background: #1a1a1a;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+    }
+
     /* Ícone de info (!) com tooltip CSS no hover */
     .mob-hl-info {
         display: inline-flex;

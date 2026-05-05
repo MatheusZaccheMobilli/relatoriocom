@@ -565,6 +565,12 @@ def _historico_mensal(serie: list[CaptacoesMes]) -> None:
     # Chart 2: dual-axis — barras (mês) + linha (acumulado YTD)
     st.markdown("&nbsp;")
     _md('<div class="mob-section-title">Captações do mês × acumulado</div>')
+    _md(
+        '<div class="mob-chart-legend">'
+        '<span class="item"><span class="swatch-bar"></span>Captações no mês</span>'
+        '<span class="item"><span class="swatch-line"></span>Acumulado YTD</span>'
+        '</div>'
+    )
 
     acumulado = 0
     rows_dual = []
