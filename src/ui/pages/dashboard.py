@@ -966,8 +966,10 @@ def _normalize_cidade(s: str) -> str:
 def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
     """Tabela consolidada: todos os negócios fechados desde Mar/2026.
 
-    Filtros: vendedor, tipo, plano, status. Busca livre por cliente ou placa.
-    Export CSV. Tabela com sort e scroll nativos do st.dataframe.
+    Header com 4 cards de totais reativos aos filtros (negócios, locação,
+    venda, devolvidos). Filtros: mês, vendedor, tipo, plano, status, origem,
+    cidade. Busca livre por cliente ou placa. Export CSV com nome refletindo
+    os filtros aplicados.
     """
     rows = []
     for snap in serie:
@@ -978,6 +980,8 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
                 else:
                     plano = "—"
                 rows.append({
+                    "Mês": mes_ano_label(snap.mes),
+                    "_mes_ord": snap.mes.toordinal(),
                     "Data": item.data_locacao,
                     "Vendedor": v.nome,
                     "Cliente": item.nome_cliente,
@@ -997,38 +1001,50 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
     df = pd.DataFrame(rows)
     df = df.sort_values("Data", ascending=False, na_position="last").reset_index(drop=True)
 
+    # Lista de meses ordenada do mais recente pro mais antigo
+    meses_unicos = (
+        df.drop_duplicates("Mês")
+        .sort_values("_mes_ord", ascending=False)["Mês"]
+        .tolist()
+    )
+
     with st.expander("Filtros e busca", expanded=True):
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            f_vend = st.multiselect(
-                "Vendedor",
-                sorted(df["Vendedor"].unique()),
-                default=[],
-            )
+            f_mes = st.multiselect("Mês", meses_unicos, default=[])
         with col2:
-            f_tipo = st.multiselect(
-                "Tipo",
-                sorted(df["Tipo"].unique()),
-                default=[],
+            f_vend = st.multiselect(
+                "Vendedor", sorted(df["Vendedor"].unique()), default=[]
             )
         with col3:
-            f_plano = st.multiselect(
-                "Plano",
-                sorted(df["Plano"].unique()),
-                default=[],
+            f_tipo = st.multiselect(
+                "Tipo", sorted(df["Tipo"].unique()), default=[]
             )
         with col4:
-            f_status = st.multiselect(
-                "Status",
-                ["Ativo", "Devolvido"],
-                default=[],
+            f_plano = st.multiselect(
+                "Plano", sorted(df["Plano"].unique()), default=[]
             )
+
+        col5, col6, col7 = st.columns(3)
+        with col5:
+            f_status = st.multiselect("Status", ["Ativo", "Devolvido"], default=[])
+        with col6:
+            f_origem = st.multiselect(
+                "Origem", sorted(df["Origem"].unique()), default=[]
+            )
+        with col7:
+            f_cidade = st.multiselect(
+                "Cidade", sorted(df["Cidade"].unique()), default=[]
+            )
+
         f_busca = st.text_input(
             "Buscar por cliente ou placa",
             placeholder="ex: João Silva, ABC1D23",
         )
 
     df_f = df.copy()
+    if f_mes:
+        df_f = df_f[df_f["Mês"].isin(f_mes)]
     if f_vend:
         df_f = df_f[df_f["Vendedor"].isin(f_vend)]
     if f_tipo:
@@ -1037,6 +1053,10 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
         df_f = df_f[df_f["Plano"].isin(f_plano)]
     if f_status:
         df_f = df_f[df_f["Status"].isin(f_status)]
+    if f_origem:
+        df_f = df_f[df_f["Origem"].isin(f_origem)]
+    if f_cidade:
+        df_f = df_f[df_f["Cidade"].isin(f_cidade)]
     if f_busca:
         s = f_busca.strip().lower()
         df_f = df_f[
@@ -1044,15 +1064,51 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
             | df_f["Placa"].str.lower().str.contains(s, na=False)
         ]
 
+    # ── Header com 4 cards de totais (reativo aos filtros) ──
     n_total = len(df)
     n_filtrado = len(df_f)
-    if n_filtrado != n_total:
-        st.caption(f"Exibindo **{n_filtrado}** de **{n_total}** negócios")
-    else:
-        st.caption(f"**{n_total}** negócios")
+    n_loc = int((df_f["Tipo"] == "Locação").sum())
+    n_vnd = int((df_f["Tipo"] == "Venda").sum())
+    n_dev = int((df_f["Status"] == "Devolvido").sum())
+    pct_dev = (n_dev / n_filtrado * 100) if n_filtrado > 0 else 0
+    pct_loc = (n_loc / n_filtrado * 100) if n_filtrado > 0 else 0
+    pct_vnd = (n_vnd / n_filtrado * 100) if n_filtrado > 0 else 0
 
+    sub_total = (
+        f"de {n_total} no recorte total"
+        if n_filtrado != n_total
+        else "todos os meses desde Mar/2026"
+    )
+
+    _md(f"""
+        <div class="mob-hl-row cols-4">
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Negócios</div>
+                <div class="mob-hl-val">{n_filtrado}</div>
+                <div class="mob-hl-sub">{html.escape(sub_total)}</div>
+            </div>
+            <div class="mob-hl parcial">
+                <div class="mob-hl-lbl">Locação</div>
+                <div class="mob-hl-val">{n_loc}</div>
+                <div class="mob-hl-sub">{pct_loc:.1f}% do recorte</div>
+            </div>
+            <div class="mob-hl ytd">
+                <div class="mob-hl-lbl">Venda</div>
+                <div class="mob-hl-val">{n_vnd}</div>
+                <div class="mob-hl-sub">{pct_vnd:.1f}% do recorte</div>
+            </div>
+            <div class="mob-hl proj">
+                <div class="mob-hl-lbl">Devolvidos</div>
+                <div class="mob-hl-val">{n_dev}</div>
+                <div class="mob-hl-sub">{pct_dev:.1f}% do recorte</div>
+            </div>
+        </div>
+    """)
+
+    # ── Tabela (oculta a coluna helper _mes_ord) ──
+    df_show = df_f.drop(columns=["_mes_ord"])
     st.dataframe(
-        df_f,
+        df_show,
         use_container_width=True,
         hide_index=True,
         height=520,
@@ -1066,11 +1122,24 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
         },
     )
 
-    csv = df_f.to_csv(index=False).encode("utf-8")
+    # ── Nome do CSV reflete filtros principais ──
+    nome_partes = ["consolidado"]
+    if f_mes and len(f_mes) <= 3:
+        nome_partes.append(
+            "_".join(m.lower().replace("/", "-") for m in f_mes)
+        )
+    if f_vend and len(f_vend) == 1:
+        nome_partes.append(f_vend[0].split()[0].lower())
+    if f_tipo and len(f_tipo) == 1:
+        nome_partes.append(f_tipo[0].lower())
+    nome_partes.append(date.today().strftime("%Y-%m-%d"))
+    nome_csv = "_".join(nome_partes) + ".csv"
+
+    csv = df_show.to_csv(index=False).encode("utf-8")
     st.download_button(
         "Baixar CSV",
         csv,
-        file_name=f"consolidado_{date.today().strftime('%Y-%m-%d')}.csv",
+        file_name=nome_csv,
         mime="text/csv",
         type="secondary",
     )
