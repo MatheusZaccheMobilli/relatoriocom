@@ -168,6 +168,37 @@ def _highlights(
         else f"{html.escape(nome_ant)}: {_brl_compacto(fat_anterior)}"
     )
 
+    # Tooltip explicando como o faturamento é calculado
+    if em_curso:
+        fat_tip = (
+            "<b>Como o faturamento é calculado</b><br/>"
+            "Soma dos boletos de aluguel pagos no MicroWork "
+            "com data de movimento dentro do mês — vem da frota "
+            "inteira de contratos ativos, não só das captações novas."
+            "<br/><br/>"
+            "Filtro: espécie OUTROS + documento no padrão "
+            "<i>dealID-NP - seq</i>. Descarta NF-E, franquia, multa, "
+            "reembolso e qualquer boleto fora desse padrão."
+            "<br/><br/>"
+            f"Mês em curso ({hoje.day:02d}/{mes_at.month:02d}): "
+            f"valor exibido é parcial. A projeção "
+            f"({_brl_compacto(proj_fat)}) usa a mesma regra dos "
+            "dias úteis decorridos × dias úteis totais."
+        )
+    else:
+        fat_tip = (
+            "<b>Como o faturamento é calculado</b><br/>"
+            "Soma dos boletos de aluguel pagos no MicroWork "
+            "com data de movimento dentro do mês — vem da frota "
+            "inteira de contratos ativos, não só das captações novas."
+            "<br/><br/>"
+            "Filtro: espécie OUTROS + documento no padrão "
+            "<i>dealID-NP - seq</i>. Descarta NF-E, franquia, multa, "
+            "reembolso e qualquer boleto fora desse padrão."
+            "<br/><br/>"
+            "Mês fechado — valor é o realizado final."
+        )
+
     # Card 3: Projeção + nudge "faltam X pra próximo nível"
     proj = cmp_.projecao_total
     if meta > 0:
@@ -226,7 +257,7 @@ def _highlights(
                 <div class="mob-hl-sub">{html.escape(sub_atual)}</div>
             </div>
             <div class="mob-hl parcial">
-                <div class="mob-hl-lbl">{html.escape(nome_at)} · faturamento</div>
+                <div class="mob-hl-lbl">{html.escape(nome_at)} · faturamento<span class="mob-hl-info" tabindex="0">!<span class="mob-hl-tip">{fat_tip}</span></span></div>
                 <div class="mob-hl-val">{_brl_compacto(fat_atual)} {_delta_badge(pct_fat)}</div>
                 <div class="mob-hl-sub">{sub_fat}</div>
             </div>
