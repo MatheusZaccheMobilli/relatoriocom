@@ -777,9 +777,18 @@ def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> Non
     ord_atual = [v for v in cmp_.atual.por_vendedor if v.total > 0]
     ord_atual.sort(key=lambda v: v.total, reverse=True)
 
-    # Cards: top N (rest goes to table). Grid 4 cols, máx 8 cards.
+    # Cards: TODOS os vendedores ativos (mesmo com 0 captações), ordenados
+    # por total decrescente. Quem captou aparece primeiro (incluindo IDs
+    # auto-descobertos do orchestrator); ativos sem captação no mês entram
+    # no fim com 0 — confirmação visual de cadastro.
+    ids_com_captacao = {v.vendedor_id for v in ord_atual}
+    cards_ativos = list(ord_atual)
+    for vid, nome in VENDEDORES.items():
+        if vid not in ids_com_captacao:
+            cards_ativos.append(CaptacoesVendedor(vendedor_id=vid, nome=nome))
+
     TOP_N = 8
-    cards = ord_atual[:TOP_N]
+    cards = cards_ativos[:TOP_N]
     n_desconhecidos = sum(1 for v in cards if _eh_nome_desconhecido(v.nome))
 
     if cards:
@@ -791,13 +800,15 @@ def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> Non
                     _card_vendedor(v, v_ant, label_ant=nome_ant, label_at=nome_at)
     else:
         st.info(
-            f"**Nenhuma captação em {nome_at}** ainda. Os cards aparecem aqui "
-            "assim que o primeiro deal WON entrar no mês."
+            f"**Nenhum vendedor ativo cadastrado.** "
+            "Adicione em `src/auth/vendedores.py`."
         )
         return
 
-    if len(ord_atual) > TOP_N:
-        st.caption(f"Exibindo top {TOP_N} vendedores. Restante na tabela abaixo.")
+    if len(cards_ativos) > TOP_N:
+        st.caption(
+            f"Exibindo top {TOP_N} vendedores. Restante na tabela abaixo."
+        )
 
     if n_desconhecidos:
         st.caption(
@@ -805,22 +816,22 @@ def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> Non
             "edite `src/auth/vendedores.py` para mapear o ID."
         )
 
-    st.markdown("&nbsp;")
+    # Chart "Top vendedores" — só faz sentido quando há captações no mês
+    if ord_atual:
+        st.markdown("&nbsp;")
+        _md(
+            f'<div class="mob-section-title">Top {min(TOP_N, len(ord_atual))} vendedores — '
+            f'{html.escape(nome_ant)} × {html.escape(nome_at)}</div>'
+        )
 
-    _md(
-        f'<div class="mob-section-title">Top {min(TOP_N, len(ord_atual))} vendedores — '
-        f'{html.escape(nome_ant)} × {html.escape(nome_at)}</div>'
-    )
+        chart_set = ord_atual[:TOP_N]
+        rows = []
+        for v in chart_set:
+            v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
+            rows.append({"Vendedor": _primeiro_nome(v.nome), "Mês": nome_ant, "Captações": v_ant.total})
+            rows.append({"Vendedor": _primeiro_nome(v.nome), "Mês": nome_at, "Captações": v.total})
+        df = pd.DataFrame(rows)
 
-    chart_set = ord_atual[:TOP_N]
-    rows = []
-    for v in chart_set:
-        v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
-        rows.append({"Vendedor": _primeiro_nome(v.nome), "Mês": nome_ant, "Captações": v_ant.total})
-        rows.append({"Vendedor": _primeiro_nome(v.nome), "Mês": nome_at, "Captações": v.total})
-    df = pd.DataFrame(rows)
-
-    if not df.empty and df["Captações"].sum() > 0:
         chart = (
             alt.Chart(df)
             .mark_bar(cornerRadiusEnd=3, height=14)
@@ -843,8 +854,6 @@ def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> Non
             .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
         )
         st.altair_chart(chart, use_container_width=True)
-    else:
-        st.info("Sem captações no período para comparar.")
 
     # Tabela: Vendedor · Ant · Atual · Var. · YTD · Loc. · Vnd.
     # Inclui TODOS os vendedores ativos (mesmo com 0 no mês selecionado),

@@ -13,8 +13,8 @@ from __future__ import annotations
 DOMINIO_CORPORATIVO = "mobillirentals.com.br"
 
 # id → nome de exibição (vendedores ATIVOS — usados no dashboard e seletor do relatório)
+# Histórico de saídas: Cleysielen Mattos (83302) saiu em mai/2026.
 VENDEDORES: dict[int, str] = {
-    83302: "Cleysielen Mattos",
     83700: "Glacio Santos Dapieve",
     83518: "Paulo Henrique Silva Cardoso",
     98314: "Francieli Serra da Silva",
@@ -37,7 +37,6 @@ OUTROS_CONHECIDOS: dict[int, tuple[str, str]] = {
 
 # email corporativo → ASSIGNED_BY_ID (usado para auth quando habilitar login)
 EMAIL_TO_ID: dict[str, int] = {
-    "cleysielen.mattos@mobillirentals.com.br": 83302,
     "glacio.dapieve@mobillirentals.com.br": 83700,
     "paulo.cardoso@mobillirentals.com.br": 83518,
     "thiago.vasconcelos@mobillirentals.com.br": 49580,
