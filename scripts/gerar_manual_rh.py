@@ -206,14 +206,14 @@ def build() -> None:
     pdf.tabela(
         [("Nível", 45), ("Atingimento da meta", 95), ("Efeito", 50)],
         [
-            ["Bronze", "De 75% até 99% da meta", "Percentual base"],
-            ["Prata", "De 100% até 124% da meta", "Percentual intermediário"],
-            ["Ouro", "125% ou mais da meta", "Percentual máximo"],
+            ["Bronze", "Abaixo de 100% da meta", "Percentual base"],
+            ["Prata", "De 100% até 131% da meta", "Percentual intermediário"],
+            ["Ouro", "132% ou mais da meta", "Percentual máximo"],
         ],
     )
     pdf.nota(
-        "Atingimento abaixo de 75% → nível Bronze (padrão). Nunca há comissão zerada "
-        "por não bater meta — o percentual Bronze sempre é aplicado."
+        "Quando o time não bate a meta, o percentual Bronze é aplicado — nunca há "
+        "comissão zerada por não atingir 100%."
     )
 
     # ═════════════════════════════════════════════════════════════════

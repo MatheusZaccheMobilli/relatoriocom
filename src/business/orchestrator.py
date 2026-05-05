@@ -205,7 +205,7 @@ def montar_relatorio(
 
     - Locação + Venda no mesmo relatório.
     - Nível calculado pelo total GERAL de captações da empresa no mês.
-    - Meta informada pelo RH = Prata (100%). Bronze=75%, Ouro=125%.
+    - Meta informada pelo RH = Prata (100%). Bronze < 100%, Ouro ≥ 132%.
     - Comissão calculada sobre valor pago (MicroWork).
     """
 

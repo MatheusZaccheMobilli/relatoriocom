@@ -171,7 +171,7 @@ def _highlights(
     proj = cmp_.projecao_total
     if meta > 0:
         prata_alvo = meta
-        ouro_alvo = int(meta * 1.25)
+        ouro_alvo = int(meta * 1.32)
         if proj >= ouro_alvo:
             nudge = f"projeção bate Ouro com folga"
         elif proj >= prata_alvo:
@@ -253,11 +253,11 @@ _NIVEL_VISUAL: dict[str, tuple[str, str]] = {
 
 
 def _classificar_nivel(atingido: int, meta: int) -> str:
-    """TM-018: Bronze < 100% · Prata ≥ 100% · Ouro ≥ 125%."""
+    """TM-018: Bronze < 100% · Prata ≥ 100% · Ouro ≥ 132%."""
     if meta <= 0:
         return "Sem Meta"
     pct = atingido / meta * 100
-    if pct >= 125:
+    if pct >= 132:
         return "Ouro"
     if pct >= 100:
         return "Prata"
@@ -274,7 +274,7 @@ def _meta_progresso(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
     emoji_proj, _ = _NIVEL_VISUAL[nivel_proj]
 
     pct_atual = (total_atual / meta * 100) if meta > 0 else 0
-    largura = min(pct_atual, 130)  # cap visual em 130% pra não estourar a barra
+    largura = min(pct_atual, 140)  # cap visual em 140% pra não estourar a barra
 
     pct_str = f"{pct_atual:.0f}%" if meta > 0 else "—"
     proj_html = (
@@ -297,7 +297,7 @@ def _meta_progresso(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
         '<div class="mob-meta-marks">'
         '<span>0</span>'
         f'<span>Prata · 100% ({meta})</span>'
-        f'<span>Ouro · 125% ({int(meta * 1.25)})</span>'
+        f'<span>Ouro · 132% ({int(meta * 1.32)})</span>'
         '</div>'
         f'{proj_html}'
         '</div>'
@@ -565,12 +565,6 @@ def _historico_mensal(serie: list[CaptacoesMes]) -> None:
     # Chart 2: dual-axis — barras (mês) + linha (acumulado YTD)
     st.markdown("&nbsp;")
     _md('<div class="mob-section-title">Captações do mês × acumulado</div>')
-    _md(
-        '<div class="mob-chart-legend">'
-        '<span class="item"><span class="swatch-bar"></span>Captações no mês</span>'
-        '<span class="item"><span class="swatch-line"></span>Acumulado YTD</span>'
-        '</div>'
-    )
 
     acumulado = 0
     rows_dual = []
@@ -588,27 +582,41 @@ def _historico_mensal(serie: list[CaptacoesMes]) -> None:
         x=alt.X("Mês:N", title=None, sort=ordem_meses,
                 axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a")),
     )
-    barras = base.mark_bar(cornerRadiusEnd=4, color="#FF6600", size=40).encode(
+    cor_serie = alt.Scale(
+        domain=["Captações no mês", "Acumulado YTD"],
+        range=["#FF6600", "#1a1a1a"],
+    )
+    barras = base.mark_bar(cornerRadiusEnd=4, size=40).encode(
         y=alt.Y("Captações:Q", title="Captações no mês",
                 axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False,
                               titleColor="#FF6600", labelColor="#1a1a1a")),
+        color=alt.Color(
+            "serie:N",
+            scale=cor_serie,
+            legend=alt.Legend(
+                orient="top", title=None, labelFontSize=13,
+                labelColor="#1a1a1a", symbolSize=120,
+            ),
+        ),
         tooltip=["Mês", "Captações"],
-    )
+    ).transform_calculate(serie='"Captações no mês"')
     linha = base.mark_line(
-        point=alt.OverlayMarkDef(filled=True, size=80, color="#1a1a1a"),
-        strokeWidth=3, color="#1a1a1a",
+        point=alt.OverlayMarkDef(filled=True, size=80),
+        strokeWidth=3,
     ).encode(
         y=alt.Y("Acumulado:Q", title="Acumulado",
                 axis=alt.Axis(grid=False, domain=False,
                               titleColor="#1a1a1a", labelColor="#1a1a1a", orient="right")),
+        color=alt.Color("serie:N", scale=cor_serie, legend=None),
         tooltip=["Mês", "Acumulado"],
-    )
+    ).transform_calculate(serie='"Acumulado YTD"')
     chart_dual = (
         alt.layer(barras, linha)
         .resolve_scale(y="independent")
         .properties(height=280, background="#ffffff")
         .configure_view(strokeWidth=0)
         .configure_axis(titleFontSize=11, titleFontWeight="bold")
+        .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
     )
     st.altair_chart(chart_dual, use_container_width=True)
 

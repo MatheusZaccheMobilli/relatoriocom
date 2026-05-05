@@ -43,10 +43,10 @@ Todos os filtros são selecionáveis. Ao mudar qualquer um, o relatório inteiro
 
 - **Competência**: mês/ano de referência (mesmo do filtro)
 - **Valor da meta mensal**: campo configurável (valor base X)
-- **Nível atingido**: calculado automaticamente:
-  - **Bronze**: atingiu pelo menos 75% da meta (X - 25%)
-  - **Prata**: atingiu 100% da meta (= X)
-  - **Ouro**: atingiu 125% da meta (X + 25%)
+- **Nível atingido**: calculado automaticamente (proporção 32%):
+  - **Bronze**: < 100% da meta (padrão, sem floor)
+  - **Prata**: ≥ 100% da meta (= X)
+  - **Ouro**: ≥ 132% da meta (X + 32%)
 
 ### Indicadores
 
@@ -151,7 +151,7 @@ Mesmo endpoint do projeto BI. Base URL no `.env` do projeto irmão (`../Constru�
 **Níveis de meta (TM-018):**
 - Bronze: < 100% da meta (padrão)
 - Prata: ≥ 100% da meta
-- Ouro: ≥ 125% da meta
+- Ouro: ≥ 132% da meta (proporção 32% sobre a meta)
 
 **Devolução:** Deal no Pipeline 22 com mesma placa + mesmo contato zera a comissão daquele ciclo.
 
