@@ -223,6 +223,9 @@ CSS_MOBILLI = """
         gap: 12px;
         margin-bottom: 24px;
     }
+    .mob-hl-row.cols-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
     .mob-hl {
         background: #ffffff;
         border-radius: 8px;
@@ -253,6 +256,7 @@ CSS_MOBILLI = """
     /* Atual recebe leve realce em laranja na borda */
     .mob-hl.parcial { border-left: 3px solid #FF6600; }
     .mob-hl.proj { border-left: 3px solid #1a1a1a; }
+    .mob-hl.ytd { border-left: 3px solid #6b7280; }
 
     /* ---------- META + NÍVEL (faixa de progresso) ---------- */
     .mob-meta-wrap {
@@ -690,17 +694,28 @@ def mes_ano_label(d: date) -> str:
     return f"{MESES_PT[d.month]}/{d.year}"
 
 
+# Teto mínimo do seletor — garante que dezembro/2026 já apareça mesmo gerando
+# em maio. Quando hoje + 1 ultrapassar este teto, ele deixa de ter efeito.
+_TETO_MINIMO_OPCOES_MES = date(2026, 12, 1)
+
+
 def opcoes_de_mes(
     ate_mes_seguinte: bool = True,
     desde: date | None = None,
 ) -> list[date]:
     """Lista meses do `desde` (default: PRIMEIRO_MES_VIGENTE) até o mês atual
-    (ou seguinte), ordenados do mais recente pro mais antigo."""
+    (ou seguinte), ordenados do mais recente pro mais antigo.
+
+    Sempre inclui pelo menos até `_TETO_MINIMO_OPCOES_MES` para que o RH veja
+    todos os meses do ano em aberto sem precisar esperar virar o mês.
+    """
     floor = desde or PRIMEIRO_MES_VIGENTE
     hoje = date.today()
     inicio = hoje.replace(day=1)
     if ate_mes_seguinte:
         inicio = inicio + relativedelta(months=1)
+    if inicio < _TETO_MINIMO_OPCOES_MES:
+        inicio = _TETO_MINIMO_OPCOES_MES
 
     meses: list[date] = []
     m = inicio

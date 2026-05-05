@@ -32,6 +32,7 @@ from src.ui.shared import (
     formatar_pct,
     mes_ano_label,
     mes_curto,
+    opcoes_de_mes,
     variacao_pct,
 )
 
@@ -112,11 +113,31 @@ def _hero(mes: date, atualizado_em: datetime) -> None:
     """)
 
 
-def _highlights(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
-    """3 destaques forward-looking: captações · faturamento R$ · projeção.
+def _ytd_totais(serie: list[CaptacoesMes], ate_mes: date) -> tuple[int, int, int, int]:
+    """Soma captações desde Mar/2026 até o mês selecionado (inclusive).
+
+    Retorna (locacoes, vendas, total, qtd_meses).
+    """
+    selecionados = [
+        s for s in serie
+        if PRIMEIRO_MES_CAPTACAO <= s.mes <= ate_mes
+    ]
+    loc = sum(s.locacoes_total for s in selecionados)
+    vnd = sum(s.vendas_total for s in selecionados)
+    return loc, vnd, loc + vnd, len(selecionados)
+
+
+def _highlights(
+    cmp_: CaptacoesComparadas,
+    meta: int,
+    hoje: date,
+    serie: list[CaptacoesMes],
+) -> None:
+    """4 destaques: captações · faturamento R$ · projeção · acumulado YTD.
 
     Card 2 mostra R$ que rodou no mês (MicroWork — boletos de aluguel
     com movimento no mês) com delta MoM e projeção fim-de-mês.
+    Card 4 mostra captações acumuladas desde Mar/2026.
     """
     total_atual = _total_emp(cmp_.atual)
     mes_at = cmp_.atual.mes
@@ -158,8 +179,17 @@ def _highlights(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
     else:
         nudge = "informe a meta no sidebar"
 
+    # Card 4: Acumulado YTD desde Mar/2026
+    _, _, ytd_total, ytd_meses = _ytd_totais(serie, mes_at)
+    primeiro = mes_curto(PRIMEIRO_MES_CAPTACAO)
+    sub_ytd = (
+        f"{ytd_meses} mês acumulado · {html.escape(primeiro)}"
+        if ytd_meses == 1
+        else f"{ytd_meses} meses · {html.escape(primeiro)} → {html.escape(nome_at)}"
+    )
+
     _md(f"""
-        <div class="mob-hl-row">
+        <div class="mob-hl-row cols-4">
             <div class="mob-hl">
                 <div class="mob-hl-lbl">{html.escape(nome_at)} · captações</div>
                 <div class="mob-hl-val">{total_atual}</div>
@@ -174,6 +204,11 @@ def _highlights(cmp_: CaptacoesComparadas, meta: int, hoje: date) -> None:
                 <div class="mob-hl-lbl">Projeção fim de {html.escape(nome_at)}</div>
                 <div class="mob-hl-val">~{proj}</div>
                 <div class="mob-hl-sub">{html.escape(nudge)}</div>
+            </div>
+            <div class="mob-hl ytd">
+                <div class="mob-hl-lbl">Acumulado YTD</div>
+                <div class="mob-hl-val">{ytd_total}</div>
+                <div class="mob-hl-sub">{sub_ytd}</div>
             </div>
         </div>
     """)
@@ -678,11 +713,23 @@ def _card_vendedor(
     """)
 
 
-def _tab_vendedores(cmp_: CaptacoesComparadas) -> None:
+def _ytd_por_vendedor(serie: list[CaptacoesMes], ate_mes: date) -> dict[int, int]:
+    """Mapa vendedor_id → total acumulado (Mar/26 até o mês selecionado)."""
+    acumulado: dict[int, int] = {}
+    for snap in serie:
+        if not (PRIMEIRO_MES_CAPTACAO <= snap.mes <= ate_mes):
+            continue
+        for v in snap.por_vendedor:
+            acumulado[v.vendedor_id] = acumulado.get(v.vendedor_id, 0) + v.total
+    return acumulado
+
+
+def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> None:
     nome_ant = mes_curto(cmp_.anterior.mes)
     nome_at = mes_curto(cmp_.atual.mes)
 
     ant_by_id = {v.vendedor_id: v for v in cmp_.anterior.por_vendedor}
+    ytd_by_id = _ytd_por_vendedor(serie, cmp_.atual.mes)
     ord_atual = [v for v in cmp_.atual.por_vendedor if v.total > 0]
     ord_atual.sort(key=lambda v: v.total, reverse=True)
 
@@ -765,6 +812,7 @@ def _tab_vendedores(cmp_: CaptacoesComparadas) -> None:
             f'<td class="num">{v_ant.total}</td>'
             f'<td class="num">{v.total}</td>'
             f'<td class="num">{_delta_badge(variacao_pct(v.total, v_ant.total))}</td>'
+            f'<td class="num">{ytd_by_id.get(v.vendedor_id, 0)}</td>'
             f'<td class="num">{sum(1 for i in v.itens if i.tipo_operacao == "Locação")}</td>'
             f'<td class="num">{v.total - sum(1 for i in v.itens if i.tipo_operacao == "Locação")}</td>'
             f'</tr>'
@@ -780,6 +828,7 @@ def _tab_vendedores(cmp_: CaptacoesComparadas) -> None:
         f'<th class="num">{html.escape(nome_ant)}</th>'
         f'<th class="num">{html.escape(nome_at)}</th>'
         '<th class="num">Var.</th>'
+        '<th class="num">YTD</th>'
         '<th class="num">Loc.</th>'
         '<th class="num">Vnd.</th>'
         '</tr></thead>'
@@ -988,9 +1037,24 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
 def render() -> None:
     st.sidebar.markdown("## Dashboard")
 
-    # Dashboard sempre olha pro mês corrente (+ histórico desde Mar/2026).
-    # Sem seletor de mês — simplifica a UI e maximiza cache hits.
-    mes = date.today().replace(day=1)
+    # Seletor de mês — default é o mês corrente. Permite voltar até Mar/2026
+    # (PRIMEIRO_MES_CAPTACAO). Para meses fechados, "Em curso" vira "Fechado"
+    # automaticamente via `em_curso` em _highlights.
+    mes_atual_default = date.today().replace(day=1)
+    meses_disp = opcoes_de_mes(
+        ate_mes_seguinte=False, desde=PRIMEIRO_MES_CAPTACAO
+    )
+    if mes_atual_default not in meses_disp:
+        meses_disp = [mes_atual_default] + meses_disp
+
+    mes = st.sidebar.selectbox(
+        "Mês de referência",
+        meses_disp,
+        index=meses_disp.index(mes_atual_default)
+        if mes_atual_default in meses_disp
+        else 0,
+        format_func=mes_ano_label,
+    )
 
     meta = st.sidebar.number_input(
         "Meta do time (qtd captações)",
@@ -1015,10 +1079,14 @@ def render() -> None:
             PRIMEIRO_MES_CAPTACAO,
             (mes.replace(day=1) - relativedelta(months=1)).replace(day=1),
         )
+        # mes_topo sempre vai até hoje (mês corrente) pra não perder histórico
+        # quando o usuário navega pra um mês passado: a série completa fica
+        # disponível, e _ytd_totais filtra por `mes` selecionado.
+        mes_topo = max(mes, mes_atual_default)
         with st.spinner("Carregando dados de vendas..."):
             serie = serie_historica_cacheada(
                 mes_floor=floor_efetivo,
-                mes_topo=mes,
+                mes_topo=mes_topo,
                 vendedores_key=vendedores_key,
             )
             cmp_ = cmp_de_serie(serie, mes_atual=mes, hoje=hoje)
@@ -1039,7 +1107,7 @@ def render() -> None:
         st.stop()
 
     _hero(mes, agora_brt())
-    _highlights(cmp_, meta, hoje)
+    _highlights(cmp_, meta, hoje, serie)
     _meta_progresso(cmp_, meta, hoje)
 
     tab_resumo, tab_evol, tab_vend, tab_prod, tab_cons = st.tabs(
@@ -1051,7 +1119,7 @@ def render() -> None:
     with tab_evol:
         _tab_evolucao(cmp_, serie)
     with tab_vend:
-        _tab_vendedores(cmp_)
+        _tab_vendedores(cmp_, serie)
     with tab_prod:
         _tab_produtividade(cmp_)
     with tab_cons:
