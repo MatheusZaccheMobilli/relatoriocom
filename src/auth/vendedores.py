@@ -17,6 +17,8 @@ VENDEDORES: dict[int, str] = {
     83302: "Cleysielen Mattos",
     83700: "Glacio Santos Dapieve",
     83518: "Paulo Henrique Silva Cardoso",
+    98314: "Francieli Serra da Silva",
+    98316: "Marcio Francisco Beloti",
 }
 
 # Lideranças (não são vendedores, mas têm acesso ao dashboard com visão completa)
