@@ -979,6 +979,13 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
                     plano = "Semanal" if item.plano_semanal else "Mensal"
                 else:
                     plano = "—"
+                # tipo_operacao vem como "Locação" / "Venda 0km" / "Venda Usado".
+                # Normaliza pra "Locação"/"Venda" e expõe a granularidade no Subtipo.
+                tipo = "Locação" if item.tipo_operacao == "Locação" else "Venda"
+                subtipo = (
+                    "—" if item.tipo_operacao == "Locação"
+                    else item.tipo_operacao.replace("Venda ", "")
+                )
                 rows.append({
                     "Mês": mes_ano_label(snap.mes),
                     "_mes_ord": snap.mes.toordinal(),
@@ -986,7 +993,8 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
                     "Vendedor": v.nome,
                     "Cliente": item.nome_cliente,
                     "Placa": item.placa or "—",
-                    "Tipo": item.tipo_operacao,
+                    "Tipo": tipo,
+                    "Subtipo": subtipo,
                     "Plano": plano,
                     "Origem": label_source(item.source_id),
                     "Cidade": _normalize_cidade(item.cidade) or "—",
