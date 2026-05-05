@@ -846,9 +846,17 @@ def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> Non
     else:
         st.info("Sem captações no período para comparar.")
 
-    # Tabela: Vendedor · Ant · Atual · Var. · Loc. · Vnd.
+    # Tabela: Vendedor · Ant · Atual · Var. · YTD · Loc. · Vnd.
+    # Inclui TODOS os vendedores ativos (mesmo com 0 no mês selecionado),
+    # pra confirmação visual de quem está cadastrado no time.
     st.markdown("&nbsp;")
     _md('<div class="mob-section-title">Detalhamento</div>')
+
+    tabela_vendedores = list(ord_atual)
+    ids_existentes = {v.vendedor_id for v in tabela_vendedores}
+    for vid, nome in VENDEDORES.items():
+        if vid not in ids_existentes:
+            tabela_vendedores.append(CaptacoesVendedor(vendedor_id=vid, nome=nome))
 
     body_rows_v = "".join(
         (
@@ -861,7 +869,7 @@ def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> Non
             f'<td class="num">{v.total - sum(1 for i in v.itens if i.tipo_operacao == "Locação")}</td>'
             f'</tr>'
         )
-        for v in ord_atual
+        for v in tabela_vendedores
         for v_ant in [ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))]
     )
 
@@ -1160,52 +1168,49 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
 _BITRIX_DEAL_URL = "https://mobilli.bitrix24.com.br/crm/deal/details/{}/"
 
 
-def _tab_revisao(serie: list[CaptacoesMes]) -> None:
-    """Lista deals fechados atribuídos a quem NÃO é vendedor ativo.
+def _tab_revisao(snap: CaptacoesMes) -> None:
+    """Lista deals do MÊS SELECIONADO atribuídos a quem NÃO é vendedor ativo.
 
     Read-only: serve pra identificar deals que precisam ter o ASSIGNED_BY
     corrigido no Bitrix24. Quando alguém corrige no CRM, o deal sai daqui
     automaticamente na próxima atualização do cache.
     """
     rows = []
-    for snap in serie:
-        for v in snap.por_vendedor:
-            if v.vendedor_id in VENDEDORES:
-                continue  # vendedor ativo — fora do escopo de revisão
-            papel = papel_por_id(v.vendedor_id) or "Desconhecido"
-            for item in v.itens:
-                tipo = "Locação" if item.tipo_operacao == "Locação" else "Venda"
-                if tipo == "Locação":
-                    plano = "Semanal" if item.plano_semanal else "Mensal"
-                else:
-                    plano = "—"
-                rows.append({
-                    "Mês": mes_ano_label(snap.mes),
-                    "_mes_ord": snap.mes.toordinal(),
-                    "Data": item.data_locacao,
-                    "Responsável atual": v.nome,
-                    "Papel": papel,
-                    "Cliente": item.nome_cliente,
-                    "Placa": item.placa or "—",
-                    "Tipo": tipo,
-                    "Plano": plano,
-                    "Origem": label_source(item.source_id),
-                    "Cidade": _normalize_cidade(item.cidade) or "—",
-                    "Status": "Devolvido" if item.devolvido else "Ativo",
-                    "Bitrix": _BITRIX_DEAL_URL.format(item.deal_id),
-                })
+    for v in snap.por_vendedor:
+        if v.vendedor_id in VENDEDORES:
+            continue  # vendedor ativo — fora do escopo de revisão
+        papel = papel_por_id(v.vendedor_id) or "Desconhecido"
+        for item in v.itens:
+            tipo = "Locação" if item.tipo_operacao == "Locação" else "Venda"
+            if tipo == "Locação":
+                plano = "Semanal" if item.plano_semanal else "Mensal"
+            else:
+                plano = "—"
+            rows.append({
+                "Data": item.data_locacao,
+                "Responsável atual": v.nome,
+                "Papel": papel,
+                "Cliente": item.nome_cliente,
+                "Placa": item.placa or "—",
+                "Tipo": tipo,
+                "Plano": plano,
+                "Origem": label_source(item.source_id),
+                "Cidade": _normalize_cidade(item.cidade) or "—",
+                "Status": "Devolvido" if item.devolvido else "Ativo",
+                "Bitrix": _BITRIX_DEAL_URL.format(item.deal_id),
+            })
+
+    nome_mes = mes_ano_label(snap.mes)
 
     if not rows:
         st.success(
-            "**Tudo certo.** Nenhum deal atribuído a não-vendedor no recorte. "
-            "Quando aparecer, vai listar aqui automaticamente."
+            f"**Tudo certo em {nome_mes}.** Nenhum deal atribuído a "
+            "não-vendedor neste mês. Se aparecer, vai listar aqui automaticamente."
         )
         return
 
     df = pd.DataFrame(rows)
-    df = df.sort_values(
-        ["_mes_ord", "Data"], ascending=[False, False], na_position="last"
-    ).reset_index(drop=True)
+    df = df.sort_values("Data", ascending=False, na_position="last").reset_index(drop=True)
 
     # Cards de totais — agrupa por papel
     n_total = len(df)
@@ -1215,7 +1220,7 @@ def _tab_revisao(serie: list[CaptacoesMes]) -> None:
     _md(f"""
         <div class="mob-hl-row">
             <div class="mob-hl proj">
-                <div class="mob-hl-lbl">Deals pra revisar</div>
+                <div class="mob-hl-lbl">Deals pra revisar em {html.escape(nome_mes)}</div>
                 <div class="mob-hl-val">{n_total}</div>
                 <div class="mob-hl-sub">atribuídos a não-vendedores</div>
             </div>
@@ -1232,34 +1237,25 @@ def _tab_revisao(serie: list[CaptacoesMes]) -> None:
         </div>
     """)
 
-    # Filtros mínimos
-    meses_unicos = (
-        df.drop_duplicates("Mês")
-        .sort_values("_mes_ord", ascending=False)["Mês"]
-        .tolist()
-    )
+    # Filtros opcionais (papel e tipo apenas — mês já filtrado no sidebar)
     with st.expander("Filtros", expanded=False):
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
-            f_mes = st.multiselect("Mês", meses_unicos, default=[], key="revisao_mes")
-        with col2:
             f_papel = st.multiselect(
                 "Papel", sorted(df["Papel"].unique()), default=[], key="revisao_papel"
             )
-        with col3:
+        with col2:
             f_tipo = st.multiselect(
                 "Tipo", sorted(df["Tipo"].unique()), default=[], key="revisao_tipo"
             )
 
     df_f = df.copy()
-    if f_mes:
-        df_f = df_f[df_f["Mês"].isin(f_mes)]
     if f_papel:
         df_f = df_f[df_f["Papel"].isin(f_papel)]
     if f_tipo:
         df_f = df_f[df_f["Tipo"].isin(f_tipo)]
 
-    df_show = df_f.drop(columns=["_mes_ord"])
+    df_show = df_f
     st.dataframe(
         df_show,
         use_container_width=True,
@@ -1364,4 +1360,4 @@ def render() -> None:
     with tab_cons:
         _tab_consolidado(serie)
     with tab_rev:
-        _tab_revisao(serie)
+        _tab_revisao(cmp_.atual)
