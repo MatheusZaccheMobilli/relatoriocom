@@ -19,6 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from src.auth import papel_por_id, tem_visao_completa, todos_nomes_conhecidos
+from src.auth.vendedores import VENDEDORES
 from src.business.orchestrator import cmp_de_serie
 from src.data.bitrix import label_source
 from src.models import CaptacoesComparadas, CaptacoesMes, CaptacoesVendedor
@@ -1153,6 +1154,126 @@ def _tab_consolidado(serie: list[CaptacoesMes]) -> None:
     )
 
 
+# ─── ABA: REVISÃO ──────────────────────────────────────────────────────
+# Bitrix24 link template — quando alguém corrige o ASSIGNED_BY no CRM,
+# o deal sai automaticamente desta aba na próxima atualização do cache.
+_BITRIX_DEAL_URL = "https://mobilli.bitrix24.com.br/crm/deal/details/{}/"
+
+
+def _tab_revisao(serie: list[CaptacoesMes]) -> None:
+    """Lista deals fechados atribuídos a quem NÃO é vendedor ativo.
+
+    Read-only: serve pra identificar deals que precisam ter o ASSIGNED_BY
+    corrigido no Bitrix24. Quando alguém corrige no CRM, o deal sai daqui
+    automaticamente na próxima atualização do cache.
+    """
+    rows = []
+    for snap in serie:
+        for v in snap.por_vendedor:
+            if v.vendedor_id in VENDEDORES:
+                continue  # vendedor ativo — fora do escopo de revisão
+            papel = papel_por_id(v.vendedor_id) or "Desconhecido"
+            for item in v.itens:
+                tipo = "Locação" if item.tipo_operacao == "Locação" else "Venda"
+                if tipo == "Locação":
+                    plano = "Semanal" if item.plano_semanal else "Mensal"
+                else:
+                    plano = "—"
+                rows.append({
+                    "Mês": mes_ano_label(snap.mes),
+                    "_mes_ord": snap.mes.toordinal(),
+                    "Data": item.data_locacao,
+                    "Responsável atual": v.nome,
+                    "Papel": papel,
+                    "Cliente": item.nome_cliente,
+                    "Placa": item.placa or "—",
+                    "Tipo": tipo,
+                    "Plano": plano,
+                    "Origem": label_source(item.source_id),
+                    "Cidade": _normalize_cidade(item.cidade) or "—",
+                    "Status": "Devolvido" if item.devolvido else "Ativo",
+                    "Bitrix": _BITRIX_DEAL_URL.format(item.deal_id),
+                })
+
+    if not rows:
+        st.success(
+            "**Tudo certo.** Nenhum deal atribuído a não-vendedor no recorte. "
+            "Quando aparecer, vai listar aqui automaticamente."
+        )
+        return
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values(
+        ["_mes_ord", "Data"], ascending=[False, False], na_position="last"
+    ).reset_index(drop=True)
+
+    # Cards de totais — agrupa por papel
+    n_total = len(df)
+    por_papel = df["Papel"].value_counts().to_dict()
+    papel_str = " · ".join(f"{papel}: {qtd}" for papel, qtd in por_papel.items())
+
+    _md(f"""
+        <div class="mob-hl-row">
+            <div class="mob-hl proj">
+                <div class="mob-hl-lbl">Deals pra revisar</div>
+                <div class="mob-hl-val">{n_total}</div>
+                <div class="mob-hl-sub">atribuídos a não-vendedores</div>
+            </div>
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Por responsável</div>
+                <div class="mob-hl-val" style="font-size:14px; line-height:1.4; padding-top:6px;">{html.escape(papel_str)}</div>
+                <div class="mob-hl-sub">corrija no Bitrix → some daqui</div>
+            </div>
+            <div class="mob-hl ytd">
+                <div class="mob-hl-lbl">Como funciona</div>
+                <div class="mob-hl-val" style="font-size:14px; line-height:1.4; padding-top:6px;">Clique em "Bitrix"</div>
+                <div class="mob-hl-sub">e troque o responsável pelo vendedor real</div>
+            </div>
+        </div>
+    """)
+
+    # Filtros mínimos
+    meses_unicos = (
+        df.drop_duplicates("Mês")
+        .sort_values("_mes_ord", ascending=False)["Mês"]
+        .tolist()
+    )
+    with st.expander("Filtros", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            f_mes = st.multiselect("Mês", meses_unicos, default=[], key="revisao_mes")
+        with col2:
+            f_papel = st.multiselect(
+                "Papel", sorted(df["Papel"].unique()), default=[], key="revisao_papel"
+            )
+        with col3:
+            f_tipo = st.multiselect(
+                "Tipo", sorted(df["Tipo"].unique()), default=[], key="revisao_tipo"
+            )
+
+    df_f = df.copy()
+    if f_mes:
+        df_f = df_f[df_f["Mês"].isin(f_mes)]
+    if f_papel:
+        df_f = df_f[df_f["Papel"].isin(f_papel)]
+    if f_tipo:
+        df_f = df_f[df_f["Tipo"].isin(f_tipo)]
+
+    df_show = df_f.drop(columns=["_mes_ord"])
+    st.dataframe(
+        df_show,
+        use_container_width=True,
+        hide_index=True,
+        height=min(520, 60 + 35 * max(len(df_show), 1)),
+        column_config={
+            "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+            "Bitrix": st.column_config.LinkColumn(
+                "Bitrix", display_text="abrir deal", width="small"
+            ),
+        },
+    )
+
+
 # ─── render principal ──────────────────────────────────────────────────
 def render() -> None:
     st.sidebar.markdown("## Dashboard")
@@ -1228,8 +1349,8 @@ def render() -> None:
     _highlights(cmp_, meta, hoje, serie)
     _meta_progresso(cmp_, meta, hoje)
 
-    tab_resumo, tab_evol, tab_vend, tab_prod, tab_cons = st.tabs(
-        ["Resumo", "Evolução", "Vendedores", "Produtividade", "Consolidado"]
+    tab_resumo, tab_evol, tab_vend, tab_prod, tab_cons, tab_rev = st.tabs(
+        ["Resumo", "Evolução", "Vendedores", "Produtividade", "Consolidado", "Revisão"]
     )
 
     with tab_resumo:
@@ -1242,3 +1363,5 @@ def render() -> None:
         _tab_produtividade(cmp_)
     with tab_cons:
         _tab_consolidado(serie)
+    with tab_rev:
+        _tab_revisao(serie)

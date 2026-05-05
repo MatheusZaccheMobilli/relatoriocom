@@ -699,6 +699,67 @@ CSS_MOBILLI = """
     /* ---------- Misc ---------- */
     hr { border-color: #e5e7eb !important; }
     .stMarkdown h2, .stMarkdown h3 { color: #1a1a1a !important; font-weight: 700; }
+
+    /* ---------- Defesa contra dark mode do browser/SO ---------- */
+    /* Streamlit usa tema light forçado em config.toml, mas alguns
+       elementos baseweb herdam color-scheme do browser. Trava manualmente. */
+    [data-testid="stMain"] {
+        color: #1a1a1a;
+        color-scheme: light;
+    }
+    [data-testid="stMain"] .stMultiSelect label,
+    [data-testid="stMain"] .stTextInput label,
+    [data-testid="stMain"] .stSelectbox label,
+    [data-testid="stMain"] .stDateInput label,
+    [data-testid="stMain"] .stCheckbox label,
+    [data-testid="stMain"] [data-testid="stWidgetLabel"] {
+        color: #1a1a1a !important;
+    }
+    [data-testid="stMain"] [data-testid="stExpander"] summary,
+    [data-testid="stMain"] [data-testid="stExpander"] summary * {
+        color: #1a1a1a !important;
+    }
+
+    /* ---------- Mobile / Tablet ---------- */
+    @media (max-width: 900px) {
+        .mob-hero {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 18px 20px 16px;
+        }
+        .mob-hero .mob-hero-meta { text-align: left; }
+        .mob-hl-row, .mob-hl-row.cols-4 {
+            grid-template-columns: 1fr 1fr;
+        }
+        .mob-meta-wrap {
+            grid-template-columns: 1fr;
+            gap: 14px;
+            padding: 16px 18px;
+        }
+        .mob-meta-head {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+    }
+    @media (max-width: 560px) {
+        .mob-hero h1 { font-size: 18px; }
+        .mob-hl-row, .mob-hl-row.cols-4 {
+            grid-template-columns: 1fr;
+        }
+        .mob-hl { padding: 16px 18px; }
+        .mob-hl-val { font-size: 28px; }
+        .mob-tab { font-size: 11px; }
+        .mob-tab th, .mob-tab td { padding: 6px 8px; }
+        /* Tooltip de info ajustado pra não vazar da viewport */
+        .mob-hl-info .mob-hl-tip {
+            width: calc(100vw - 60px);
+            right: 0;
+            left: auto;
+            max-width: 280px;
+        }
+    }
 </style>
 """
 
