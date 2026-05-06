@@ -4,7 +4,7 @@ Fonte da verdade enquanto o webhook do Bitrix não tem scope `user`.
 Atualizar manualmente quando entrar/sair vendedor.
 
 Email → ASSIGNED_BY_ID extraído de:
-  - users.xls (export do Bitrix, departamento "Vendas")
+  - docs/users.xls (export do Bitrix, departamento "Vendas")
   - confirmação manual com IDs do projeto
 """
 
