@@ -13,6 +13,7 @@ from src.models import (
     CaptacoesVendedor,
     ComissaoItem,
     Deal,
+    FrotaSnapshot,
     Pagamento,
     RelatorioData,
     Vendedor,
@@ -839,3 +840,46 @@ def serie_historica(
         )
         for mes in meses
     ]
+
+
+# ─── Frota (SPA Inventário) ────────────────────────────────────────────
+# Stage labels considerados terminais (saíram da frota). Tudo o que sobra
+# entra em `ativa`. Mantemos esses literais por aqui em vez de dependerem
+# dos stage_ids do bitrix porque o orchestrator não deve conhecer IDs do
+# CRM — só labels de domínio.
+_FROTA_TERMINAIS = {"Vendida", "Cancelada"}
+
+
+def snapshot_frota() -> FrotaSnapshot:
+    """Snapshot agregado da SPA Inventário — KPIs de frota pro dashboard.
+
+    Categorias:
+      - alugadas: stage "Alugada"
+      - disponiveis: stage "Disponíveis"
+      - manutencao: qualquer label começando com "Manutenção"
+      - outros: ativos restantes (preparação, trânsito, parceiros, MKT...)
+      - terminais (Vendida/Cancelada): excluídos do total ativo
+    """
+    contagem = bitrix.contar_motos_por_estado()
+    alugadas = contagem.get("Alugada", 0)
+    disponiveis = contagem.get("Disponíveis", 0)
+    manutencao = sum(
+        qtd
+        for label, qtd in contagem.items()
+        if label.startswith("Manutenção")
+    )
+    ativos = {
+        label: qtd
+        for label, qtd in contagem.items()
+        if label not in _FROTA_TERMINAIS
+    }
+    ativa = sum(ativos.values())
+    outros = ativa - alugadas - disponiveis - manutencao
+    return FrotaSnapshot(
+        ativa=ativa,
+        alugadas=alugadas,
+        disponiveis=disponiveis,
+        manutencao=manutencao,
+        outros=outros,
+        por_estado=ativos,
+    )

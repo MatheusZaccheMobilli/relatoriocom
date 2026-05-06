@@ -15,8 +15,14 @@ from src.business.orchestrator import (
     captacoes_no_mes,
     montar_relatorio,
     serie_historica,
+    snapshot_frota,
 )
-from src.models import CaptacoesComparadas, CaptacoesMes, RelatorioData
+from src.models import (
+    CaptacoesComparadas,
+    CaptacoesMes,
+    FrotaSnapshot,
+    RelatorioData,
+)
 
 
 # TTL de 30min: dashboard não precisa de dado super-fresco e mantém cache
@@ -94,9 +100,16 @@ def serie_historica_cacheada(
     )
 
 
+@st.cache_data(ttl=_TTL_SEGUNDOS, show_spinner=False)
+def frota_cacheada() -> FrotaSnapshot:
+    """Snapshot da frota (SPA Inventário do Bitrix). TTL de 30min."""
+    return snapshot_frota()
+
+
 def limpar_cache() -> None:
     """Invalida todo o cache de dados — usado pelo botão 'Atualizar agora'."""
     relatorio_cacheado.clear()
     captacoes_cacheadas.clear()
     captacoes_comparadas_cacheadas.clear()
     serie_historica_cacheada.clear()
+    frota_cacheada.clear()

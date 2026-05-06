@@ -22,8 +22,13 @@ from src.auth import papel_por_id, tem_visao_completa, todos_nomes_conhecidos
 from src.auth.vendedores import VENDEDORES
 from src.business.orchestrator import cmp_de_serie
 from src.data.bitrix import label_source
-from src.models import CaptacoesComparadas, CaptacoesMes, CaptacoesVendedor
-from src.ui.data import limpar_cache, serie_historica_cacheada
+from src.models import (
+    CaptacoesComparadas,
+    CaptacoesMes,
+    CaptacoesVendedor,
+    FrotaSnapshot,
+)
+from src.ui.data import frota_cacheada, limpar_cache, serie_historica_cacheada
 from src.ui.shared import (
     PRIMEIRO_MES_CAPTACAO,
     agora_brt,
@@ -270,6 +275,77 @@ def _highlights(
                 <div class="mob-hl-lbl">Acumulado YTD</div>
                 <div class="mob-hl-val">{ytd_total}</div>
                 <div class="mob-hl-sub">{sub_ytd}</div>
+            </div>
+        </div>
+    """)
+
+
+# ─── FROTA (SPA Inventário) ────────────────────────────────────────────
+def _frota_card(frota: FrotaSnapshot) -> None:
+    """4 mini-cards com o estado atual da frota.
+
+    Independente do mês selecionado — sempre snapshot de hoje. Tooltips
+    detalham as variantes de manutenção e os estados em "Outros".
+    """
+    ativa = frota.ativa
+    if ativa == 0:
+        return  # sem dados, não polui a tela
+
+    pct_alug = frota.alugadas / ativa * 100
+    pct_manut = frota.manutencao / ativa * 100
+
+    manut_detalhes = sorted(
+        ((label, qtd) for label, qtd in frota.por_estado.items()
+         if label.startswith("Manutenção")),
+        key=lambda x: -x[1],
+    )
+    manut_tip = (
+        "<b>Variantes de manutenção</b><br/>"
+        + "<br/>".join(
+            f"{html.escape(label)}: {qtd}" for label, qtd in manut_detalhes
+        )
+    ) if manut_detalhes else "Sem motos em manutenção no momento."
+
+    outros_detalhes = sorted(
+        ((label, qtd) for label, qtd in frota.por_estado.items()
+         if label not in ("Alugada", "Disponíveis")
+         and not label.startswith("Manutenção")),
+        key=lambda x: -x[1],
+    )
+    outros_tip = (
+        "<b>Estados em \"Outros\"</b><br/>"
+        + "<br/>".join(
+            f"{html.escape(label)}: {qtd}" for label, qtd in outros_detalhes
+        )
+    ) if outros_detalhes else "Sem motos em estados secundários."
+
+    sub_alug = (
+        f"{pct_alug:.0f}% da frota · {frota.disponiveis} disponível"
+        if frota.disponiveis == 1
+        else f"{pct_alug:.0f}% da frota · {frota.disponiveis} disponíveis"
+    )
+
+    _md(f"""
+        <div class="mob-hl-row cols-4">
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Frota ativa</div>
+                <div class="mob-hl-val">{ativa}</div>
+                <div class="mob-hl-sub">total na operação</div>
+            </div>
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Alugadas</div>
+                <div class="mob-hl-val">{frota.alugadas}</div>
+                <div class="mob-hl-sub">{html.escape(sub_alug)}</div>
+            </div>
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Em manutenção<span class="mob-hl-info" tabindex="0">!<span class="mob-hl-tip">{manut_tip}</span></span></div>
+                <div class="mob-hl-val">{frota.manutencao}</div>
+                <div class="mob-hl-sub">{pct_manut:.0f}% da frota</div>
+            </div>
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Outros estados<span class="mob-hl-info" tabindex="0">!<span class="mob-hl-tip">{outros_tip}</span></span></div>
+                <div class="mob-hl-val">{frota.outros}</div>
+                <div class="mob-hl-sub">preparação · trânsito · sinistro · etc.</div>
             </div>
         </div>
     """)
@@ -1419,6 +1495,16 @@ def render() -> None:
 
     _hero(mes, agora_brt())
     _highlights(cmp_, meta, hoje, serie)
+
+    # Frota é independente do mês — falha silenciosa se a SPA Inventário
+    # não responder (webhook sem permissão, timeout): card só não aparece.
+    try:
+        frota = frota_cacheada()
+    except Exception:  # noqa: BLE001
+        frota = None
+    if frota is not None:
+        _frota_card(frota)
+
     _meta_progresso(cmp_, meta, hoje)
 
     tab_resumo, tab_evol, tab_vend, tab_prod, tab_cons, tab_rev = st.tabs(

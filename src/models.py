@@ -83,6 +83,23 @@ class InventarioMoto:
 
 
 @dataclass(frozen=True)
+class FrotaSnapshot:
+    """Snapshot agregado da frota — usado pelo card de Frota no dashboard.
+
+    `ativa` exclui terminais (Vendida, Cancelada). `outros` é tudo que está
+    ativo mas não cai em alugadas/disponíveis/manutenção (preparação,
+    trânsito, MKT, parceiros, sinistro, etc.) — detalhado em `por_estado`.
+    """
+
+    ativa: int
+    alugadas: int
+    disponiveis: int
+    manutencao: int
+    outros: int
+    por_estado: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class NivelMeta:
     """Resultado do cálculo de nível de meta."""
 
