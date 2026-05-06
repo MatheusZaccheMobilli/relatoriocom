@@ -1,5 +1,7 @@
 """Dataclasses centrais — nenhum dict cru cruza fronteiras de camada."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
@@ -55,6 +57,29 @@ class Vendedor:
     id: int
     nome: str
     cpf: str = ""  # pode não estar disponível (scope limitado)
+
+
+@dataclass(frozen=True)
+class InventarioMoto:
+    """Uma moto na SPA Inventário (entityTypeId=1072) do Bitrix.
+
+    Pipeline 28 é o único da SPA. `deal_id` (parentId2) liga a moto ao deal
+    de locação ativo; `cadastro_id` aponta pra SPA Cadastro (1076), que é o
+    catálogo permanente das motos da frota.
+    """
+
+    id: int
+    placa: str
+    modelo: str
+    cor: str
+    base: str  # label legível (Serra galpão, Vila Velha APP, ...)
+    stage_id: str  # ex: "DT1072_28:UC_S400BR"
+    stage_label: str  # ex: "Alugada"
+    deal_id: Optional[int] = None  # parentId2 — deal vinculado, se houver
+    cadastro_id: Optional[int] = None  # ufCrm16_1749580517 — catálogo
+    moved_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    local_locacao: str = ""
 
 
 @dataclass(frozen=True)

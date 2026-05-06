@@ -1,22 +1,88 @@
-"""Cliente da API Bitrix24 — puxa deals e vendedores."""
+"""Cliente da API Bitrix24 — puxa deals, vendedores e SPA Inventário."""
 
 import os
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from threading import Semaphore
 from typing import Optional
 
 import requests
 
-from src.models import Deal, Vendedor
+from src.models import Deal, InventarioMoto, Vendedor
 
 # Pipelines relevantes
 PIPELINE_LOCACAO = 48           # Locação APP (fluxo principal)
 PIPELINE_LOCACAO_SHOWROOM = 0   # Locação Showroom (presencial)
 PIPELINE_VENDA = 40
+
+# ─── SPA Inventário de Motos (entityTypeId 1072) ───────────────────────
+INVENTARIO_ENTITY_TYPE_ID = 1072
+CADASTRO_ENTITY_TYPE_ID = 1076  # SPA Cadastro das Motos (catálogo)
+
+# Stages do pipeline 28 do Inventário (único pipeline da SPA)
+STAGE_INV_DISPONIVEL = "DT1072_28:NEW"
+STAGE_INV_ALUGADA = "DT1072_28:UC_S400BR"
+STAGE_INV_VENDIDA = "DT1072_28:SUCCESS"
+STAGE_INV_CANCELADA = "DT1072_28:FAIL"
+
+# Mapa stageId → label legível (descoberto via crm.status.list)
+STAGES_INVENTARIO: dict[str, str] = {
+    "DT1072_28:NEW": "Disponíveis",
+    "DT1072_28:UC_1BA0K7": "Amostra | Teste | ADM",
+    "DT1072_28:UC_WG73L1": "MKT",
+    "DT1072_28:UC_S400BR": "Alugada",
+    "DT1072_28:UC_CF60AT": "Parceiros",
+    "DT1072_28:UC_IK83H1": "Manutenção | Com Cliente",
+    "DT1072_28:UC_R2ZTM1": "Manutenção | Sem Cliente",
+    "DT1072_28:UC_S503RS": "Manutenção | Desmobilização",
+    "DT1072_28:UC_G81GRJ": "Manutenção | Externo",
+    "DT1072_28:UC_89PW1I": "Moto c/ Restrição e sem Doc",
+    "DT1072_28:UC_YDDGMM": "Sinistro | BO",
+    "DT1072_28:UC_JR7O9S": "Preparação da Moto",
+    "DT1072_28:UC_XZV1UO": "Aguardando Assinatura Transp.",
+    "DT1072_28:UC_Q6V7UW": "Em Trânsito",
+    "DT1072_28:SUCCESS": "Vendida",
+    "DT1072_28:FAIL": "Cancelada",
+}
+
+# Campos custom do Inventário usados pelo app
+_INV_PLACA = "ufCrm_68BB19F1AD8FD"
+_INV_CADASTRO_ID = "ufCrm16_1749580517"
+_INV_MODELO = "ufCrm16_1758898469346"
+_INV_COR = "ufCrm16_1758052962637"
+_INV_BASE = "ufCrm16_1766577003"
+_INV_LOCAL_LOCACAO = "ufCrm16_1762542381071"
+_INV_DATA_ULTIMA_LOCACAO = "ufCrm16_1762542410292"
+
+# Mapa enumerated → texto (extraído de crm.item.fields, items[].ID → VALUE)
+_BASE_LABELS: dict[str, str] = {
+    "11354": "Serra galpão",
+    "11356": "Vila Velha APP",
+    "11358": "Vila Velha SH",
+    "11360": "Serra SH",
+    "11362": "Troca ou Destroca",
+    # códigos do Cadastro (SPA 1076) — mesmo dicionário lógico
+    "11338": "Serra galpão",
+    "11340": "Vila Velha APP",
+    "11342": "Vila Velha SH",
+    "11344": "Serra SH",
+    "11346": "Troca ou Destroca",
+}
+
+
+def label_base(raw: str | int | None) -> str:
+    if raw in (None, "", 0):
+        return ""
+    return _BASE_LABELS.get(str(raw), str(raw))
+
+
+def label_stage_inventario(stage_id: str | None) -> str:
+    if not stage_id:
+        return ""
+    return STAGES_INVENTARIO.get(stage_id, stage_id)
 
 # Catálogo de origens (SOURCE_ID → nome legível) — extraído do Bitrix via
 # crm.status.list ENTITY_ID=SOURCE. Mantém em código pra:
@@ -66,6 +132,15 @@ def _webhook_url() -> str:
     if not url:
         raise RuntimeError("Variável BITRIX_WEBHOOK_URL não configurada")
     return url.rstrip("/")
+
+
+def _webhook_item_url() -> str:
+    """Webhook usado para SPAs (crm.item.*).
+
+    Cai pro `BITRIX_WEBHOOK_URL` se a variável dedicada não estiver setada —
+    o scope `crm` cobre os endpoints `crm.item.*` em ambos os webhooks.
+    """
+    return (os.getenv("BITRIX_WEBHOOK_ITEM_URL") or _webhook_url()).rstrip("/")
 
 
 def _call(method: str, params: dict | None = None) -> dict:
@@ -306,3 +381,126 @@ def buscar_placa_contato(contact_id: int) -> str:
         return ""
     except Exception:
         return ""
+
+
+# ─── SPA Inventário (crm.item.*) ───────────────────────────────────────
+def _call_item(method: str, params: dict | None = None) -> dict:
+    """Versão de `_call` que usa o webhook de SPA (BITRIX_WEBHOOK_ITEM_URL)."""
+    url = f"{_webhook_item_url()}/{method}.json"
+    last_exc: Exception | None = None
+    delay = 0.5
+
+    with _BITRIX_GATE:
+        for tentativa in range(4):
+            try:
+                resp = requests.post(url, data=params or {}, timeout=30)
+                if resp.status_code in _RETRY_STATUS:
+                    last_exc = requests.HTTPError(
+                        f"{resp.status_code} {resp.reason} (Bitrix {method})"
+                    )
+                else:
+                    resp.raise_for_status()
+                    return resp.json()
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_exc = exc
+
+            if tentativa < 3:
+                time.sleep(delay + random.uniform(0, 0.25))
+                delay *= 2
+
+    raise last_exc or RuntimeError(f"Bitrix {method} falhou sem causa identificada")
+
+
+def _call_item_list(entity_type_id: int, filtros: dict | None = None) -> list[dict]:
+    """Paginação para `crm.item.list` — shape do response é `result.items`."""
+    items: list[dict] = []
+    start = 0
+    base_params = {"entityTypeId": entity_type_id, **(filtros or {})}
+
+    while True:
+        params = {**base_params, "start": start}
+        data = _call_item("crm.item.list", params)
+        page = data.get("result", {}).get("items", [])
+        if not page:
+            break
+        items.extend(page)
+        next_val = data.get("next")
+        if next_val is None:
+            break
+        start = int(next_val)
+
+    return items
+
+
+def _parse_dt(raw: str | None) -> Optional[datetime]:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _build_inventario(raw: dict) -> InventarioMoto:
+    return InventarioMoto(
+        id=int(raw["id"]),
+        placa=(raw.get(_INV_PLACA) or raw.get("title") or "").strip().upper(),
+        modelo=(raw.get(_INV_MODELO) or "").strip(),
+        cor=(raw.get(_INV_COR) or "").strip(),
+        base=label_base(raw.get(_INV_BASE)),
+        stage_id=raw.get("stageId") or "",
+        stage_label=label_stage_inventario(raw.get("stageId")),
+        deal_id=int(raw["parentId2"]) if raw.get("parentId2") else None,
+        cadastro_id=int(raw[_INV_CADASTRO_ID]) if raw.get(_INV_CADASTRO_ID) else None,
+        moved_at=_parse_dt(raw.get("movedTime")),
+        updated_at=_parse_dt(raw.get("updatedTime")),
+        local_locacao=(raw.get(_INV_LOCAL_LOCACAO) or "").strip(),
+    )
+
+
+def listar_inventario(stage_ids: list[str] | None = None) -> list[InventarioMoto]:
+    """Lista todas as motos do Inventário, opcionalmente filtrando por stages."""
+    if stage_ids:
+        # Bitrix aceita array em filtro: filter[stageId][]=... — mas via POST
+        # urlencoded precisa de key repetida. Mais simples: 1 chamada por stage.
+        out: list[InventarioMoto] = []
+        for sid in stage_ids:
+            raws = _call_item_list(
+                INVENTARIO_ENTITY_TYPE_ID, {"filter[stageId]": sid}
+            )
+            out.extend(_build_inventario(r) for r in raws)
+        return out
+    raws = _call_item_list(INVENTARIO_ENTITY_TYPE_ID)
+    return [_build_inventario(r) for r in raws]
+
+
+def contar_motos_por_estado() -> dict[str, int]:
+    """Retorna dict[stage_label, count] com a distribuição atual da frota."""
+    motos = listar_inventario()
+    contagem: dict[str, int] = {}
+    for m in motos:
+        label = m.stage_label or "Sem estado"
+        contagem[label] = contagem.get(label, 0) + 1
+    return contagem
+
+
+def contar_motos_alugadas() -> int:
+    """KPI rápido: quantas motos estão no estado Alugada agora."""
+    return len(listar_inventario([STAGE_INV_ALUGADA]))
+
+
+def buscar_placas_por_deals(deal_ids: list[int]) -> dict[int, str]:
+    """Resolve placas a partir de deal_ids via Inventário (parentId2 → deal).
+
+    Cobertura observada: ~99.5% das motos Alugadas têm parentId2 preenchido.
+    Para deals sem item no Inventário, o caller deve fazer fallback para
+    `Deal.placa` ou `buscar_placa_contato`.
+    """
+    if not deal_ids:
+        return {}
+    motos = listar_inventario()
+    return {
+        m.deal_id: m.placa
+        for m in motos
+        if m.deal_id in set(deal_ids) and m.placa
+    }
