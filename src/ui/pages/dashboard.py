@@ -1296,18 +1296,54 @@ def _tab_revisao(snap: CaptacoesMes) -> None:
         df_f = df_f[df_f["Tipo"].isin(f_tipo)]
 
     df_show = df_f
-    st.dataframe(
-        df_show,
-        use_container_width=True,
-        hide_index=True,
-        height=min(520, 60 + 35 * max(len(df_show), 1)),
-        column_config={
-            "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
-            "Bitrix": st.column_config.LinkColumn(
-                "Bitrix", display_text="abrir deal", width="small"
-            ),
-        },
+
+    # Renderiza como HTML manual: o LinkColumn do Streamlit às vezes não
+    # navega corretamente dentro do iframe do Streamlit Cloud. Com <a> e
+    # target="_blank" explícito, abre garantido em nova aba.
+    if df_show.empty:
+        st.info("Nenhum deal corresponde aos filtros selecionados.")
+        return
+
+    cols_visiveis = [c for c in df_show.columns if c != "Bitrix"]
+    headers_html = "".join(
+        f"<th>{html.escape(c)}</th>" for c in cols_visiveis
+    ) + "<th>Bitrix</th>"
+
+    rows_html_list = []
+    for _, row in df_show.iterrows():
+        cells = []
+        for c in cols_visiveis:
+            val = row[c]
+            if c == "Data" and val is not None:
+                txt = val.strftime("%d/%m/%Y") if hasattr(val, "strftime") else str(val)
+            else:
+                txt = "" if val is None else str(val)
+            cells.append(f"<td>{html.escape(txt)}</td>")
+        url = html.escape(str(row["Bitrix"]), quote=True)
+        cells.append(
+            f'<td><a href="{url}" target="_blank" rel="noopener noreferrer" '
+            f'class="mob-deal-link">abrir deal ↗</a></td>'
+        )
+        rows_html_list.append(f"<tr>{''.join(cells)}</tr>")
+
+    table_html = (
+        '<div class="mob-tab-revisao-wrap">'
+        '<table class="mob-tab">'
+        f'<thead><tr>{headers_html}</tr></thead>'
+        f'<tbody>{"".join(rows_html_list)}</tbody>'
+        '</table>'
+        '</div>'
+        '<style>'
+        '.mob-tab-revisao-wrap { max-height: 520px; overflow: auto; '
+        'border-radius: 8px; border: 1px solid #e5e7eb; }'
+        '.mob-tab-revisao-wrap .mob-tab { border: none; border-radius: 0; }'
+        '.mob-tab-revisao-wrap thead th { position: sticky; top: 0; z-index: 1; }'
+        '.mob-deal-link { color: #FF6600; font-weight: 600; '
+        'text-decoration: none; white-space: nowrap; }'
+        '.mob-deal-link:hover { text-decoration: underline; }'
+        '</style>'
     )
+    st.markdown(table_html, unsafe_allow_html=True)
 
 
 # ─── render principal ──────────────────────────────────────────────────
