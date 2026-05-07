@@ -17,6 +17,7 @@ from dateutil.relativedelta import relativedelta
 import altair as alt
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src.auth import papel_por_id, tem_visao_completa, todos_nomes_conhecidos
 from src.auth.vendedores import VENDEDORES
@@ -974,34 +975,29 @@ def _tab_vendedores(cmp_: CaptacoesComparadas, serie: list[CaptacoesMes]) -> Non
         if vid not in ids_existentes:
             tabela_vendedores.append(CaptacoesVendedor(vendedor_id=vid, nome=nome))
 
-    body_rows_v = "".join(
-        (
-            f'<tr><td>{html.escape(v.nome)}</td>'
-            f'<td class="num">{v_ant.total}</td>'
-            f'<td class="num">{v.total}</td>'
-            f'<td class="num">{_delta_badge(variacao_pct(v.total, v_ant.total))}</td>'
-            f'<td class="num">{ytd_by_id.get(v.vendedor_id, 0)}</td>'
-            f'<td class="num">{sum(1 for i in v.itens if i.tipo_operacao == "Locação")}</td>'
-            f'<td class="num">{v.total - sum(1 for i in v.itens if i.tipo_operacao == "Locação")}</td>'
-            f'</tr>'
+    linhas_vend = []
+    for v in tabela_vendedores:
+        v_ant = ant_by_id.get(
+            v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome)
         )
-        for v in tabela_vendedores
-        for v_ant in [ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))]
-    )
-
-    _md(
-        '<table class="mob-tab">'
-        '<thead><tr>'
-        '<th>Vendedor</th>'
-        f'<th class="num">{html.escape(nome_ant)}</th>'
-        f'<th class="num">{html.escape(nome_at)}</th>'
-        '<th class="num">Var.</th>'
-        '<th class="num">YTD</th>'
-        '<th class="num">Loc.</th>'
-        '<th class="num">Vnd.</th>'
-        '</tr></thead>'
-        f'<tbody>{body_rows_v}</tbody>'
-        '</table>'
+        loc_v = sum(1 for i in v.itens if i.tipo_operacao == "Locação")
+        linhas_vend.append({
+            "Vendedor": v.nome,
+            nome_ant: v_ant.total,
+            nome_at: v.total,
+            "Var. %": variacao_pct(v.total, v_ant.total),
+            "YTD": ytd_by_id.get(v.vendedor_id, 0),
+            "Loc.": loc_v,
+            "Vnd.": v.total - loc_v,
+        })
+    df_vend = pd.DataFrame(linhas_vend)
+    st.dataframe(
+        df_vend,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Var. %": st.column_config.NumberColumn(format="%+.0f%%"),
+        },
     )
 
 
@@ -1049,35 +1045,30 @@ def _tab_produtividade(cmp_: CaptacoesComparadas) -> None:
     ord_atual = [v for v in cmp_.atual.por_vendedor if v.total > 0]
     ord_atual.sort(key=lambda v: v.total, reverse=True)
 
-    body_rows_p = ""
+    linhas_prod = []
     for v in ord_atual:
         v_ant = ant_by_id.get(v.vendedor_id, CaptacoesVendedor(v.vendedor_id, v.nome))
         loc_v = sum(1 for i in v.itens if i.tipo_operacao == "Locação")
         vnd_v = v.total - loc_v
         prod_v = v.total / cmp_.du_decorridos_atual if cmp_.du_decorridos_atual else 0
         prod_v_ant = v_ant.total / cmp_.du_mes_anterior if cmp_.du_mes_anterior else 0
-        body_rows_p += (
-            f'<tr><td>{html.escape(v.nome)}</td>'
-            f'<td class="num">{v.total}</td>'
-            f'<td class="num">{prod_v:.1f}</td>'
-            f'<td class="num" style="color:#6b7280;">{prod_v_ant:.1f}</td>'
-            f'<td class="num">{loc_v}</td>'
-            f'<td class="num">{vnd_v}</td>'
-            f'</tr>'
-        )
-
-    _md(
-        '<table class="mob-tab">'
-        '<thead><tr>'
-        '<th>Vendedor</th>'
-        f'<th class="num">Total {html.escape(nome_at)}</th>'
-        f'<th class="num">Neg./du {html.escape(nome_at)}</th>'
-        f'<th class="num">Neg./du {html.escape(nome_ant)}</th>'
-        '<th class="num">Loc.</th>'
-        '<th class="num">Vnd.</th>'
-        '</tr></thead>'
-        f'<tbody>{body_rows_p}</tbody>'
-        '</table>'
+        linhas_prod.append({
+            "Vendedor": v.nome,
+            f"Total {nome_at}": v.total,
+            f"Neg./du {nome_at}": prod_v,
+            f"Neg./du {nome_ant}": prod_v_ant,
+            "Loc.": loc_v,
+            "Vnd.": vnd_v,
+        })
+    df_prod = pd.DataFrame(linhas_prod)
+    st.dataframe(
+        df_prod,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            f"Neg./du {nome_at}": st.column_config.NumberColumn(format="%.1f"),
+            f"Neg./du {nome_ant}": st.column_config.NumberColumn(format="%.1f"),
+        },
     )
 
 
@@ -1402,24 +1393,71 @@ def _tab_revisao(snap: CaptacoesMes) -> None:
         )
         rows_html_list.append(f"<tr>{''.join(cells)}</tr>")
 
-    table_html = (
-        '<div class="mob-tab-revisao-wrap">'
-        '<table class="mob-tab">'
-        f'<thead><tr>{headers_html}</tr></thead>'
-        f'<tbody>{"".join(rows_html_list)}</tbody>'
-        '</table>'
-        '</div>'
-        '<style>'
-        '.mob-tab-revisao-wrap { max-height: 520px; overflow: auto; '
-        'border-radius: 8px; border: 1px solid #e5e7eb; }'
-        '.mob-tab-revisao-wrap .mob-tab { border: none; border-radius: 0; }'
-        '.mob-tab-revisao-wrap thead th { position: sticky; top: 0; z-index: 1; }'
-        '.mob-deal-link { color: #FF6600; font-weight: 600; '
-        'text-decoration: none; white-space: nowrap; }'
-        '.mob-deal-link:hover { text-decoration: underline; }'
-        '</style>'
-    )
-    st.markdown(table_html, unsafe_allow_html=True)
+    # Renderiza num components.html (iframe) pra suportar <script> de sort
+    # client-side. Os <a target="_blank"> continuam funcionando normalmente
+    # (target=_blank escapa do iframe). CSS embedded inline porque o iframe
+    # não enxerga o CSS do parent.
+    full_html = f"""
+<!DOCTYPE html>
+<html><head><style>
+body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; color: #1a1a1a; }}
+.wrap {{ max-height: 520px; overflow: auto; border-radius: 8px; border: 1px solid #e5e7eb; }}
+.mob-tab {{ width: 100%; border-collapse: collapse; font-size: 13px; background: #ffffff; }}
+.mob-tab th {{ text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: #6b7280; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; background: #f9fafb;
+    font-weight: 700; cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 1; }}
+.mob-tab th:hover {{ background: #f3f4f6; color: #1a1a1a; }}
+.mob-tab th.sort-asc::after {{ content: " ▲"; color: #FF6600; }}
+.mob-tab th.sort-desc::after {{ content: " ▼"; color: #FF6600; }}
+.mob-tab td {{ padding: 10px 14px; border-bottom: 1px solid #f3f4f6; }}
+.mob-tab tr:last-child td {{ border-bottom: none; }}
+.mob-tab tr:hover td {{ background: #fafbfc; }}
+.mob-deal-link {{ color: #FF6600; font-weight: 600; text-decoration: none; white-space: nowrap; }}
+.mob-deal-link:hover {{ text-decoration: underline; }}
+</style></head><body>
+<div class="wrap"><table class="mob-tab" id="tab-rev">
+<thead><tr>{headers_html}</tr></thead>
+<tbody>{"".join(rows_html_list)}</tbody>
+</table></div>
+<script>
+(function() {{
+  const table = document.getElementById('tab-rev');
+  const headers = table.querySelectorAll('thead th');
+  // Última coluna (Bitrix) é só o link — não faz sentido ordenar.
+  headers.forEach((th, idx) => {{
+    if (idx === headers.length - 1) {{ th.style.cursor = 'default'; return; }}
+    th.addEventListener('click', () => sortBy(idx, th));
+  }});
+  function parseCell(s) {{
+    s = (s || '').trim();
+    const m = s.match(/^(\\d{{2}})\\/(\\d{{2}})\\/(\\d{{4}})$/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+    const cleaned = s.replace(/[^0-9,.\\-]/g, '').replace(',', '.');
+    if (cleaned && cleaned !== '-' && cleaned !== '.') {{
+      const n = parseFloat(cleaned);
+      if (!isNaN(n)) return n;
+    }}
+    return s.toLowerCase();
+  }}
+  function sortBy(colIdx, th) {{
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.rows);
+    const wasAsc = th.classList.contains('sort-asc');
+    headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+    const dir = wasAsc ? -1 : 1;
+    th.classList.add(wasAsc ? 'sort-desc' : 'sort-asc');
+    rows.sort((a, b) => {{
+      const av = parseCell(a.cells[colIdx].textContent);
+      const bv = parseCell(b.cells[colIdx].textContent);
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    }});
+    rows.forEach(r => tbody.appendChild(r));
+  }}
+}})();
+</script></body></html>
+"""
+    components.html(full_html, height=560, scrolling=False)
 
 
 # ─── render principal ──────────────────────────────────────────────────
