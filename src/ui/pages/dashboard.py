@@ -1496,14 +1496,10 @@ def render() -> None:
     _hero(mes, agora_brt())
     _highlights(cmp_, meta, hoje, serie)
 
-    # Frota é independente do mês — falha silenciosa se a SPA Inventário
-    # não responder (webhook sem permissão, timeout): card só não aparece.
-    try:
-        frota = frota_cacheada()
-    except Exception:  # noqa: BLE001
-        frota = None
-    if frota is not None:
-        _frota_card(frota)
+    # Slot reservado pro card de Frota — popula no fim do render pra
+    # não bloquear o resto do dashboard enquanto a SPA Inventário
+    # paginar (~6s no cold start, instant após cacheado).
+    frota_slot = st.empty()
 
     _meta_progresso(cmp_, meta, hoje)
 
@@ -1523,3 +1519,13 @@ def render() -> None:
         _tab_consolidado(serie)
     with tab_rev:
         _tab_revisao(cmp_.atual)
+
+    # Frota: fetch só agora pra deixar o resto do dashboard interativo
+    # primeiro. Falha silenciosa se a SPA não responder.
+    try:
+        frota = frota_cacheada()
+    except Exception:  # noqa: BLE001
+        frota = None
+    if frota is not None:
+        with frota_slot.container():
+            _frota_card(frota)
