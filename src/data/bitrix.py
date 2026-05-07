@@ -305,10 +305,14 @@ def buscar_vendedores(user_ids: list[int]) -> dict[int, Vendedor]:
 PIPELINE_DEVOLUCAO = 22
 
 
-def _devolucoes_de_placa(placa: str) -> tuple[str, list[dict]]:
-    """Busca devoluções (P22) de UMA placa. Retorna (placa, lista)."""
-    params = {
-        "filter[UF_CRM_1749815964662]": placa,
+# Bitrix limita o tamanho da URL/payload, então quebramos as placas em
+# lotes. 50 por lote é seguro e mantém a contagem de chamadas baixa.
+_DEVOLUCAO_BATCH = 50
+
+
+def _devolucoes_lote(placas_lote: list[str]) -> list[dict]:
+    """Busca devoluções (P22) para um lote de placas via filter array OR."""
+    params: dict = {
         "filter[CATEGORY_ID]": PIPELINE_DEVOLUCAO,
         "select[]": [
             "ID", "TITLE", "CONTACT_ID",
@@ -316,27 +320,20 @@ def _devolucoes_de_placa(placa: str) -> tuple[str, list[dict]]:
             "UF_CRM_1758565735272",   # Data devolução
         ],
     }
-    deals = _call_list("crm.deal.list", params)
-    devs = []
-    for d in deals:
-        data_dev = _parse_date(d.get("UF_CRM_1758565735272"))
-        if data_dev:
-            devs.append({
-                "id": int(d["ID"]),
-                "titulo": d.get("TITLE", ""),
-                "placa": placa,
-                "data_devolucao": data_dev,
-                "contact_id": int(d["CONTACT_ID"]) if d.get("CONTACT_ID") else None,
-            })
-    return placa, devs
+    # filter[UF_CRM_1749815964662][0]=PLACA1, filter[...][1]=PLACA2, ...
+    # Bitrix interpreta como OR dentro do mesmo campo.
+    for i, placa in enumerate(placas_lote):
+        params[f"filter[UF_CRM_1749815964662][{i}]"] = placa
+    return _call_list("crm.deal.list", params)
 
 
 def buscar_devolucoes_por_placas(placas: list[str]) -> dict[str, list[dict]]:
     """Busca deals de devolução no Pipeline 22 para as placas informadas.
 
     Retorna dict[placa, lista de devoluções] com data_devolucao e titulo.
-    Faz N chamadas paralelas (uma por placa única) — ordens de magnitude
-    mais rápido que o loop sequencial original.
+    Lotes de até `_DEVOLUCAO_BATCH` placas via filter OR — 1 chamada por
+    lote em vez de 1 por placa. Para 200 placas: 4 chamadas paralelas
+    em vez de 200. Reduz drasticamente carga no Bitrix e tempo total.
     """
     if not placas:
         return {}
@@ -345,13 +342,29 @@ def buscar_devolucoes_por_placas(placas: list[str]) -> dict[str, list[dict]]:
     if not placas_unicas:
         return {}
 
+    lotes = [
+        placas_unicas[i : i + _DEVOLUCAO_BATCH]
+        for i in range(0, len(placas_unicas), _DEVOLUCAO_BATCH)
+    ]
+
     resultado: dict[str, list[dict]] = {}
-    # 6 workers — o semáforo global de 4 conexões serializa o excedente,
-    # mas mantemos um pequeno pool pra esconder latência de DNS/TCP.
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        for placa, devs in ex.map(_devolucoes_de_placa, placas_unicas):
-            if devs:
-                resultado[placa] = devs
+    # max_workers = nº de lotes (gated em 6 pelo _BITRIX_GATE).
+    with ThreadPoolExecutor(max_workers=max(1, len(lotes))) as ex:
+        for raw_deals in ex.map(_devolucoes_lote, lotes):
+            for d in raw_deals:
+                placa = (d.get("UF_CRM_1749815964662") or "").strip()
+                if not placa:
+                    continue
+                data_dev = _parse_date(d.get("UF_CRM_1758565735272"))
+                if not data_dev:
+                    continue
+                resultado.setdefault(placa, []).append({
+                    "id": int(d["ID"]),
+                    "titulo": d.get("TITLE", ""),
+                    "placa": placa,
+                    "data_devolucao": data_dev,
+                    "contact_id": int(d["CONTACT_ID"]) if d.get("CONTACT_ID") else None,
+                })
 
     return resultado
 
