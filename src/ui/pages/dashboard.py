@@ -1,7 +1,7 @@
 """Página: Dashboard Comercial — comparação mês atual × mês anterior + projeção.
 
-Inspirado no dashboard interno da Mobílli (Apps Script). Quatro tabs:
-Resumo · Evolução · Vendedores · Produtividade.
+Inspirado no dashboard interno da Mobílli (Apps Script). Sete tabs:
+Resumo · Frota · Evolução · Vendedores · Produtividade · Consolidado · Revisão.
 
 Filtro = mês de captação (deals com data_locacao no mês calendário).
 """
@@ -347,6 +347,170 @@ def _frota_card(frota: FrotaSnapshot) -> None:
                 <div class="mob-hl-lbl">Outros estados<span class="mob-hl-info" tabindex="0">!<span class="mob-hl-tip">{outros_tip}</span></span></div>
                 <div class="mob-hl-val">{frota.outros}</div>
                 <div class="mob-hl-sub">preparação · trânsito · sinistro · etc.</div>
+            </div>
+        </div>
+    """)
+
+
+# ─── FROTA — breakdown completo + histórico de novas locações ─────────
+def _frota_breakdown(frota: FrotaSnapshot) -> None:
+    """Barra horizontal com todos os estados da SPA Inventário.
+
+    Complementa os 4 mini-cards mostrando o detalhamento completo
+    (Alugada, Disponíveis, manutenção variantes, preparação, trânsito, etc.).
+    """
+    if not frota.por_estado:
+        return
+
+    # categorização visual para colorir grupos (alinhado aos cards)
+    def _bucket(label: str) -> str:
+        if label == "Alugada":
+            return "Alugadas"
+        if label == "Disponíveis":
+            return "Disponíveis"
+        if label.startswith("Manutenção"):
+            return "Manutenção"
+        return "Outros"
+
+    rows = [
+        {"Estado": label, "Qtd": qtd, "Categoria": _bucket(label)}
+        for label, qtd in frota.por_estado.items()
+        if qtd > 0
+    ]
+    if not rows:
+        return
+
+    df = pd.DataFrame(rows).sort_values("Qtd", ascending=False)
+
+    _md('<div class="mob-section-title">Detalhamento por estado</div>')
+    chart = (
+        alt.Chart(df)
+        .mark_bar(cornerRadiusEnd=4, height=22)
+        .encode(
+            y=alt.Y(
+                "Estado:N",
+                title=None,
+                sort="-x",
+                axis=alt.Axis(labelColor="#1a1a1a", domain=False, ticks=False, labelFontSize=12),
+            ),
+            x=alt.X(
+                "Qtd:Q",
+                title="Motos",
+                axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a", titleColor="#1a1a1a"),
+            ),
+            color=alt.Color(
+                "Categoria:N",
+                scale=alt.Scale(
+                    domain=["Alugadas", "Disponíveis", "Manutenção", "Outros"],
+                    range=["#FF6600", "#10b981", "#f59e0b", "#6b7280"],
+                ),
+                legend=alt.Legend(orient="top", title=None, labelFontSize=13, labelColor="#1a1a1a"),
+            ),
+            tooltip=["Estado", "Qtd", "Categoria"],
+        )
+        .properties(height=max(160, 28 * len(df)), background="#ffffff")
+        .configure_view(strokeWidth=0)
+        .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
+        .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _frota_historico_locacoes(serie: list[CaptacoesMes]) -> None:
+    """Barras: quantas motos colocamos na rua por mês (novas locações).
+
+    Usa locacoes_total da série histórica (deals do pipeline 48 fechados
+    com data_locacao no mês). Mostra média móvel de 3 meses como referência.
+    """
+    if len(serie) < 1:
+        st.info(
+            "**Histórico de locações vai aparecer aqui** assim que houver "
+            "pelo menos 1 mês fechado a partir de Mar/2026."
+        )
+        return
+
+    rows = [
+        {
+            "Mês": mes_curto(s.mes),
+            "ord": s.mes.toordinal(),
+            "Locações": s.locacoes_total,
+        }
+        for s in serie
+    ]
+    df = pd.DataFrame(rows)
+    ordem = [mes_curto(s.mes) for s in serie]
+
+    # média móvel 3 meses (referência visual de tendência)
+    if len(serie) >= 3:
+        valores = [s.locacoes_total for s in serie]
+        mm = []
+        for i in range(len(valores)):
+            janela = valores[max(0, i - 2) : i + 1]
+            mm.append(round(sum(janela) / len(janela), 1))
+        df["MM3"] = mm
+
+    _md('<div class="mob-section-title">Novas locações por mês</div>')
+
+    base = alt.Chart(df).encode(
+        x=alt.X(
+            "Mês:N",
+            title=None,
+            sort=ordem,
+            axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a"),
+        ),
+    )
+    barras = base.mark_bar(cornerRadiusEnd=4, color="#FF6600", size=44).encode(
+        y=alt.Y(
+            "Locações:Q",
+            title=None,
+            axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a"),
+        ),
+        tooltip=["Mês", "Locações"],
+    )
+
+    layers = [barras]
+    if "MM3" in df.columns:
+        linha_mm = base.mark_line(
+            color="#1a1a1a",
+            strokeWidth=2,
+            strokeDash=[4, 3],
+            point=alt.OverlayMarkDef(filled=True, size=50, color="#1a1a1a"),
+        ).encode(
+            y=alt.Y("MM3:Q"),
+            tooltip=[alt.Tooltip("Mês"), alt.Tooltip("MM3:Q", title="Média 3 meses")],
+        )
+        layers.append(linha_mm)
+
+    chart = (
+        alt.layer(*layers)
+        .properties(height=300, background="#ffffff")
+        .configure_view(strokeWidth=0)
+        .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+    # KPI rápido abaixo do chart: total YTD + média
+    total_ytd = sum(s.locacoes_total for s in serie)
+    media = round(total_ytd / len(serie), 1) if serie else 0
+    ultimo = serie[-1].locacoes_total if serie else 0
+    nome_ultimo = mes_curto(serie[-1].mes) if serie else "—"
+
+    _md(f"""
+        <div class="mob-hl-row cols-3" style="margin-top: 0.5rem;">
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Total YTD</div>
+                <div class="mob-hl-val">{total_ytd}</div>
+                <div class="mob-hl-sub">novas locações no acumulado</div>
+            </div>
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Média mensal</div>
+                <div class="mob-hl-val">{media}</div>
+                <div class="mob-hl-sub">desde Mar/2026</div>
+            </div>
+            <div class="mob-hl">
+                <div class="mob-hl-lbl">Último mês ({html.escape(nome_ultimo)})</div>
+                <div class="mob-hl-val">{ultimo}</div>
+                <div class="mob-hl-sub">motos novas na rua</div>
             </div>
         </div>
     """)
@@ -1533,20 +1697,23 @@ def render() -> None:
 
     _hero(mes, agora_brt())
     _highlights(cmp_, meta, hoje, serie)
-
-    # Slot reservado pro card de Frota — popula no fim do render pra
-    # não bloquear o resto do dashboard enquanto a SPA Inventário
-    # paginar (~6s no cold start, instant após cacheado).
-    frota_slot = st.empty()
-
     _meta_progresso(cmp_, meta, hoje)
 
-    tab_resumo, tab_evol, tab_vend, tab_prod, tab_cons, tab_rev = st.tabs(
-        ["Resumo", "Evolução", "Vendedores", "Produtividade", "Consolidado", "Revisão"]
+    tab_resumo, tab_frota, tab_evol, tab_vend, tab_prod, tab_cons, tab_rev = st.tabs(
+        ["Resumo", "Frota", "Evolução", "Vendedores", "Produtividade", "Consolidado", "Revisão"]
     )
 
     with tab_resumo:
         _tab_resumo(cmp_)
+    with tab_frota:
+        # Slot pro snapshot ao vivo — preenchido depois pra não bloquear
+        # os outros tabs enquanto a SPA Inventário paginar (~6s cold start).
+        frota_slot = st.empty()
+        with frota_slot.container():
+            st.caption("Carregando snapshot da frota…")
+        # Histórico de novas locações (não depende da SPA, renderiza já)
+        st.markdown("&nbsp;")
+        _frota_historico_locacoes(serie)
     with tab_evol:
         _tab_evolucao(cmp_, serie)
     with tab_vend:
@@ -1567,3 +1734,10 @@ def render() -> None:
     if frota is not None:
         with frota_slot.container():
             _frota_card(frota)
+            _frota_breakdown(frota)
+    else:
+        with frota_slot.container():
+            st.warning(
+                "Snapshot da frota indisponível no momento "
+                "(SPA Inventário não respondeu). Tente recarregar."
+            )
