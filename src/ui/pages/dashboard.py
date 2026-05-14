@@ -396,6 +396,7 @@ def _frota_breakdown(frota: FrotaSnapshot) -> None:
             x=alt.X(
                 "Qtd:Q",
                 title="Motos",
+                stack=None,
                 axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a", titleColor="#1a1a1a"),
             ),
             color=alt.Color(
@@ -417,7 +418,7 @@ def _frota_breakdown(frota: FrotaSnapshot) -> None:
 
 
 def _frota_historico_locacoes(serie: list[CaptacoesMes]) -> None:
-    """Barras: quantas motos colocamos na rua por mês (novas locações).
+    """Linhas: quantas motos colocamos na rua por mês (novas locações).
 
     Usa locacoes_total da série histórica (deals do pipeline 48 fechados
     com data_locacao no mês). Mostra média móvel de 3 meses como referência.
@@ -429,28 +430,39 @@ def _frota_historico_locacoes(serie: list[CaptacoesMes]) -> None:
         )
         return
 
+    ordem = [mes_curto(s.mes) for s in serie]
+    tem_mm = len(serie) >= 3
+    valores = [s.locacoes_total for s in serie]
+
+    # Long-format: cada linha = um ponto de dado por (Mês, Série).
     rows = [
-        {
-            "Mês": mes_curto(s.mes),
-            "ord": s.mes.toordinal(),
-            "Locações": s.locacoes_total,
-        }
+        {"Mês": mes_curto(s.mes), "Valor": s.locacoes_total, "Série": "Novas locações"}
         for s in serie
     ]
-    df = pd.DataFrame(rows)
-    ordem = [mes_curto(s.mes) for s in serie]
-
-    # média móvel 3 meses (referência visual de tendência)
-    if len(serie) >= 3:
-        valores = [s.locacoes_total for s in serie]
-        mm = []
-        for i in range(len(valores)):
+    if tem_mm:
+        for i, s in enumerate(serie):
             janela = valores[max(0, i - 2) : i + 1]
-            mm.append(round(sum(janela) / len(janela), 1))
-        df["MM3"] = mm
+            mm_val = round(sum(janela) / len(janela), 1)
+            rows.append(
+                {"Mês": mes_curto(s.mes), "Valor": mm_val, "Série": "Média 3 meses"}
+            )
+    df = pd.DataFrame(rows)
 
     _md('<div class="mob-section-title">Novas locações por mês</div>')
 
+    dominio = ["Novas locações"] + (["Média 3 meses"] if tem_mm else [])
+    cores = ["#FF6600"] + (["#1a1a1a"] if tem_mm else [])
+    escala = alt.Scale(domain=dominio, range=cores)
+    legenda = alt.Legend(
+        orient="top",
+        title=None,
+        labelFontSize=13,
+        labelColor="#1a1a1a",
+        symbolStrokeWidth=2,
+        symbolSize=160,
+    )
+
+    # mark_line por série; estilos separados pra distinguir principal × MM
     base = alt.Chart(df).encode(
         x=alt.X(
             "Mês:N",
@@ -458,34 +470,41 @@ def _frota_historico_locacoes(serie: list[CaptacoesMes]) -> None:
             sort=ordem,
             axis=alt.Axis(labelFontSize=12, domain=False, ticks=False, labelColor="#1a1a1a"),
         ),
-    )
-    barras = base.mark_bar(cornerRadiusEnd=4, color="#FF6600", size=44).encode(
         y=alt.Y(
-            "Locações:Q",
+            "Valor:Q",
             title=None,
             axis=alt.Axis(grid=True, gridColor="#eef0f3", domain=False, labelColor="#1a1a1a"),
         ),
-        tooltip=["Mês", "Locações"],
+        color=alt.Color("Série:N", scale=escala, legend=legenda),
+        tooltip=["Mês", "Série", alt.Tooltip("Valor:Q", title="Locações")],
     )
 
-    layers = [barras]
-    if "MM3" in df.columns:
-        linha_mm = base.mark_line(
-            color="#1a1a1a",
-            strokeWidth=2,
-            strokeDash=[4, 3],
-            point=alt.OverlayMarkDef(filled=True, size=50, color="#1a1a1a"),
-        ).encode(
-            y=alt.Y("MM3:Q"),
-            tooltip=[alt.Tooltip("Mês"), alt.Tooltip("MM3:Q", title="Média 3 meses")],
+    # Série principal: linha sólida + pontos cheios
+    linha_principal = (
+        base.transform_filter(alt.datum["Série"] == "Novas locações")
+        .mark_line(strokeWidth=3, point=alt.OverlayMarkDef(filled=True, size=80))
+    )
+
+    layers = [linha_principal]
+    if tem_mm:
+        # Média móvel: linha tracejada, mais fina, pontos menores
+        linha_mm = (
+            base.transform_filter(alt.datum["Série"] == "Média 3 meses")
+            .mark_line(
+                strokeWidth=2,
+                strokeDash=[4, 3],
+                point=alt.OverlayMarkDef(filled=True, size=50),
+            )
         )
         layers.append(linha_mm)
 
     chart = (
         alt.layer(*layers)
+        .resolve_scale(color="shared", y="shared")
         .properties(height=300, background="#ffffff")
         .configure_view(strokeWidth=0)
         .configure_axis(labelColor="#1a1a1a", titleColor="#1a1a1a")
+        .configure_legend(labelColor="#1a1a1a", labelFontSize=13)
     )
     st.altair_chart(chart, use_container_width=True)
 
