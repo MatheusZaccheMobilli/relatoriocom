@@ -46,7 +46,7 @@ from src.ui.shared import (
 
 # Meta de captações do time, ajustada manualmente a cada mês pelo RH.
 # Trocar este valor antes do primeiro dia útil do mês seguinte.
-META_TIME: int = 184
+META_TIME: int = 124
 
 
 def _brl_compacto(v: Decimal | float | int) -> str:
